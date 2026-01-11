@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { GitaResponse } from '../types';
 
-const DIVINE_LOGO_PATH = "logo krishna.jpg"; 
+const DIVINE_LOGO_PATH = "logo.png"; 
 const FALLBACK_LOGO = "https://images.unsplash.com/photo-1590059392655-08e826b1f237?q=80&w=400&auto=format&fit=crop";
 
 const AskGita: React.FC = () => {
@@ -61,7 +61,7 @@ const AskGita: React.FC = () => {
                 <img 
                   src={DIVINE_LOGO_PATH} 
                   alt="Divine Avatar" 
-                  className="w-full h-full object-cover scale-110 object-center transition-all duration-700" 
+                  className="w-full h-full object-cover scale-150 object-center transition-all duration-700" 
                   onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
                 />
               </div>
@@ -106,12 +106,12 @@ const AskGita: React.FC = () => {
                 </span>
               </div>
             ) : (
-              <div className="flex gap-5 items-start max-w-[98%] group">
-                <div className="w-14 h-14 rounded-full overflow-hidden border-4 border-white shadow-2xl flex-shrink-0 bg-white ring-2 ring-orange-100 flex items-center justify-center mt-2 overflow-hidden divine-aura">
+              <div className="flex gap-4 items-start max-w-[98%] group">
+                <div className="w-14 h-14 rounded-full overflow-hidden border-4 border-white shadow-2xl flex-shrink-0 bg-white ring-2 ring-orange-100 flex items-center justify-center overflow-hidden divine-aura">
                   <img 
                     src={DIVINE_LOGO_PATH} 
                     alt="Avatar" 
-                    className="w-full h-full object-cover scale-110" 
+                    className="w-full h-full object-cover scale-150 object-center" 
                     onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
                   />
                 </div>
@@ -150,7 +150,7 @@ const AskGita: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <span className="text-[10px] text-stone-400 font-black ml-6 mt-1 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-[10px] text-stone-400 font-black ml-4 mt-1 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
                     <i className="fa-solid fa-clock text-[9px] mr-2"></i>
                     Divine Insight • {msg.timestamp}
                   </span>
@@ -160,11 +160,11 @@ const AskGita: React.FC = () => {
           </div>
         ))}
         {isTyping && (
-          <div className="flex justify-start items-center gap-6 pl-6 animate-pulse">
+          <div className="flex justify-start items-center gap-4 pl-0 animate-pulse">
             <div className="w-14 h-14 rounded-full border-4 border-white bg-white flex items-center justify-center shadow-lg divine-aura overflow-hidden">
-               <img src={DIVINE_LOGO_PATH} alt="Loading Krishna" className="w-full h-full object-cover scale-110" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+               <img src={DIVINE_LOGO_PATH} alt="Loading Krishna" className="w-full h-full object-cover scale-150 object-center" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             </div>
-            <div className="bg-white/80 backdrop-blur-sm border border-orange-50 px-8 py-5 rounded-[2rem] italic text-stone-400 text-[12px] font-bold tracking-wide shadow-sm">
+            <div className="bg-white/80 backdrop-blur-sm border border-orange-50 px-8 py-5 rounded-[2rem] rounded-tl-none italic text-stone-400 text-[12px] font-bold tracking-wide shadow-sm">
               Krishna is preparing your guidance...
             </div>
           </div>
@@ -183,7 +183,7 @@ const AskGita: React.FC = () => {
                 <img 
                   src={DIVINE_LOGO_PATH} 
                   alt="Input Logo" 
-                  className="w-full h-full object-cover scale-110"
+                  className="w-full h-full object-cover scale-150 object-center"
                   onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
                 />
              </div>

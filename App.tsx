@@ -8,8 +8,8 @@ import Read from './components/Read';
 import Discover from './components/Discover';
 import AskGita from './components/AskGita';
 
-// Path for the user's logo
-const DIVINE_LOGO_PATH = "logo krishna.jpg"; 
+// Path for the user's logo - assumed to be in the project root as logo.png
+const DIVINE_LOGO_PATH = "logo.png"; 
 const FALLBACK_LOGO = "https://images.unsplash.com/photo-1590059392655-08e826b1f237?q=80&w=400&auto=format&fit=crop";
 
 const App: React.FC = () => {
@@ -51,7 +51,7 @@ const App: React.FC = () => {
             <img 
               src={DIVINE_LOGO_PATH} 
               alt="Krishna Logo" 
-              className="w-full h-full object-cover scale-110 object-center transition-transform hover:scale-125 duration-700" 
+              className="w-full h-full object-cover scale-150 object-center transition-transform hover:scale-[1.65] duration-700" 
               onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
             />
           </div>
@@ -87,7 +87,7 @@ const App: React.FC = () => {
             <img 
               src={DIVINE_LOGO_PATH} 
               alt="Logo" 
-              className="w-full h-full object-cover scale-110" 
+              className="w-full h-full object-cover scale-150" 
               onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
             />
           </div>

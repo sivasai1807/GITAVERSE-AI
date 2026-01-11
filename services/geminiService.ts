@@ -9,7 +9,7 @@ Your mission: Solve modern human problems using eternal Vedic wisdom.
 
 Core Directives:
 1. RESPONSE LANGUAGE: Always respond in the EXACT language the user types in (Hindi, English, etc.).
-2. SPELLING: Automatically correct user spelling errors in your understanding and provide a perfect, grammatically correct response.
+2. SPELLING: Automatically correct user spelling errors and provide a perfect, grammatically correct response.
 3. AUTHENTICITY: Never hallucinate slokas. Use Chapter and Verse numbers.
 4. TONE: Divine yet relatable. Like Krishna speaking to Arjuna on the battlefield.
 5. ASK GITA: When a user shares a problem, provide:
@@ -41,6 +41,36 @@ export async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Prom
     channelData[i] = dataInt16[i] / 32768.0;
   }
   return buffer;
+}
+
+/**
+ * Wraps PCM data in a WAV header so it can be downloaded and played in standard players.
+ */
+export function createWavBlob(pcmData: Uint8Array, sampleRate: number = 24000): Blob {
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 32 + pcmData.length, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // Byte rate
+  view.setUint16(32, 2, true); // Block align
+  view.setUint16(34, 16, true); // Bits per sample
+  writeString(36, 'data');
+  view.setUint32(40, pcmData.length, true);
+
+  return new Blob([header, pcmData], { type: 'audio/wav' });
 }
 
 export const geminiService = {
@@ -129,11 +159,10 @@ export const geminiService = {
     return JSON.parse(response.text);
   },
 
-  // Fix: Added getDailyQuote implementation
   async getDailyQuote(lang: AppLanguage): Promise<DailyQuote> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Provide a unique daily Bhagavad Gita quote in ${lang} with Sanskrit sloka, its meaning, and a reflection.`,
+      contents: `Provide a unique daily Bhagavad Gita quote in ${lang}.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
@@ -151,11 +180,10 @@ export const geminiService = {
     return JSON.parse(response.text);
   },
 
-  // Fix: Added getDailyStory implementation
   async getDailyStory(lang: AppLanguage): Promise<DailyStory> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Create a high-impact, short modern story (Modern Leela) based on Bhagavad Gita teachings in ${lang}.`,
+      contents: `Modern Leela story in ${lang}.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
@@ -173,19 +201,16 @@ export const geminiService = {
     return JSON.parse(response.text);
   },
 
-  // Fix: Added getChapterIntro implementation
   async getChapterIntro(chapterNum: number, lang: AppLanguage): Promise<ChapterIntro> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Provide an introduction and summary for Bhagavad Gita Chapter ${chapterNum} in ${lang}.`,
+      contents: `Ch ${chapterNum} summary in ${lang}.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
-          properties: {
-            chapter_summary: { type: Type.STRING },
-          },
+          properties: { chapter_summary: { type: Type.STRING } },
           required: ["chapter_summary"],
         }
       }
@@ -193,11 +218,10 @@ export const geminiService = {
     return JSON.parse(response.text);
   },
 
-  // Fix: Added getDiscoverContent implementation
   async getDiscoverContent(): Promise<DiscoverContent> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Suggest 3 guided meditations, 3 deep philosophical topics, 3 spiritual articles, and 3 sacred video topics all related to the Bhagavad Gita. Return a list of titles for each category.`,
+      contents: `Gita discovery content.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
@@ -220,7 +244,7 @@ export const geminiService = {
     try {
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Speak this sacred sloka with perfect Vedic Sanskrit pronunciation, then slowly read the meaning: ${text}` }] }],
+        contents: [{ parts: [{ text: `Read with perfect Vedic resonance: ${text}` }] }],
         config: {
           responseModalities: ['AUDIO'],
           speechConfig: {

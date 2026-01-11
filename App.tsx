@@ -14,6 +14,8 @@ const App: React.FC = () => {
   const [uxText, setUxText] = useState<UXText | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
+  const DIVINE_LOGO_URL = "https://m.media-amazon.com/images/I/91M-1Pq-D6L._AC_UF1000,1000_QL80_.jpg";
+
   useEffect(() => {
     if (currentView !== ViewState.LANGUAGE_SELECT && !uxText) {
       loadUXText();
@@ -40,8 +42,10 @@ const App: React.FC = () => {
   if (currentView === ViewState.LANGUAGE_SELECT) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-orange-50">
-        <div className="text-center mb-12">
-          <i className="fa-solid fa-om text-6xl text-orange-600 mb-4 animate-pulse"></i>
+        <div className="text-center mb-12 flex flex-col items-center">
+          <div className="w-32 h-32 rounded-full overflow-hidden mb-6 shadow-2xl border-4 border-white">
+            <img src={DIVINE_LOGO_URL} alt="Krishna Arjuna" className="w-full h-full object-cover" />
+          </div>
           <h1 className="cinzel text-4xl font-bold text-stone-800 mb-2 tracking-tighter">GitaVerse AI</h1>
           <p className="text-stone-600 text-sm font-medium">Divine Wisdom Awaits</p>
         </div>
@@ -64,7 +68,9 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col pb-20 bg-[#fffaf5]">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-orange-100 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <i className="fa-solid fa-om text-orange-600 text-2xl"></i>
+          <div className="w-10 h-10 rounded-full overflow-hidden border border-orange-200 shadow-sm">
+            <img src={DIVINE_LOGO_URL} alt="Logo" className="w-full h-full object-cover" />
+          </div>
           <div>
             <h1 className="cinzel text-lg font-bold leading-none tracking-tight">GitaVerse</h1>
             <p className="text-[9px] text-stone-500 tracking-widest uppercase font-bold">Divine Intelligence</p>

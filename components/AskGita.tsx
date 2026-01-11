@@ -9,6 +9,8 @@ const AskGita: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const endOfChatRef = useRef<HTMLDivElement>(null);
 
+  const DIVINE_LOGO_URL = "https://m.media-amazon.com/images/I/91M-1Pq-D6L._AC_UF1000,1000_QL80_.jpg";
+
   const scrollToBottom = () => {
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -41,8 +43,10 @@ const AskGita: React.FC = () => {
     <div className="flex flex-col h-[calc(100vh-8rem)] max-w-2xl mx-auto p-4">
       <div className="flex-1 overflow-y-auto space-y-6 pb-6 scrollbar-hide">
         {messages.length === 0 && (
-          <div className="text-center py-20 animate-fade-in">
-            <i className="fa-solid fa-om text-5xl text-orange-200 mb-6 block"></i>
+          <div className="text-center py-20 animate-fade-in flex flex-col items-center">
+            <div className="w-24 h-24 rounded-full overflow-hidden mb-6 shadow-xl border-2 border-orange-100">
+              <img src={DIVINE_LOGO_URL} alt="Divine Logo" className="w-full h-full object-cover" />
+            </div>
             <h2 className="cinzel text-xl font-bold text-stone-700">What troubles your heart today?</h2>
             <p className="text-stone-400 text-sm max-w-xs mx-auto mt-2 italic">Speak freely. The Gita holds the answer to every dilemma.</p>
           </div>

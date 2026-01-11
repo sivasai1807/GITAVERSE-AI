@@ -11,17 +11,39 @@
     <style>
         body {
             font-family: 'Lora', serif;
-            background-color: #fffaf0; /* Floral White */
+            background-color: #fffcf9; 
+            overflow: hidden; /* Ensure no body scrollbar */
         }
         .cinzel { font-family: 'Cinzel', serif; }
         .sanskrit { font-family: 'Sanskrit Text', serif; }
-        .bg-saffron { background-color: #f4c430; }
-        .text-saffron { color: #f4c430; }
-        .border-saffron { border-color: #f4c430; }
         
-        /* Smooth transitions */
-        .fade-enter { opacity: 0; transform: translateY(10px); }
-        .fade-enter-active { opacity: 1; transform: translateY(0); transition: all 300ms ease-out; }
+        /* Absolute Scrollbar Removal */
+        ::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+        }
+        * {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+
+        /* Divine Aura Animation */
+        @keyframes aura-glow {
+            0% { box-shadow: 0 0 20px rgba(244, 196, 48, 0.2); }
+            50% { box-shadow: 0 0 40px rgba(244, 196, 48, 0.5); }
+            100% { box-shadow: 0 0 20px rgba(244, 196, 48, 0.2); }
+        }
+        .divine-aura {
+            animation: aura-glow 3s ease-in-out infinite;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
     </style>
 <script type="importmap">
 {

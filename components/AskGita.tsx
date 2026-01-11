@@ -3,14 +3,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { GitaResponse } from '../types';
 
+const DIVINE_LOGO_PATH = "logo krishna.jpg"; 
+const FALLBACK_LOGO = "https://images.unsplash.com/photo-1590059392655-08e826b1f237?q=80&w=400&auto=format&fit=crop";
+
 const AskGita: React.FC = () => {
-  const [messages, setMessages] = useState<{ role: 'user' | 'gita'; content: any }[]>([]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'gita'; content: any; timestamp: string }[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const endOfChatRef = useRef<HTMLDivElement>(null);
-
-  // Using the high-quality public URL for the user's preferred Krishna-Arjuna painting
-  const DIVINE_LOGO_URL = "https://m.media-amazon.com/images/I/91M-1Pq-D6L._AC_UF1000,1000_QL80_.jpg";
 
   const scrollToBottom = () => {
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -25,50 +25,71 @@ const AskGita: React.FC = () => {
     if (!input.trim() || isTyping) return;
 
     const userMsg = input.trim();
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setMessages(prev => [...prev, { role: 'user', content: userMsg, timestamp }]);
     setIsTyping(true);
 
     try {
       const response = await geminiService.askGita(userMsg);
-      setMessages(prev => [...prev, { role: 'gita', content: response }]);
+      const gitaTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setMessages(prev => [...prev, { role: 'gita', content: response, timestamp: gitaTimestamp }]);
     } catch (err) {
       console.error(err);
-      setMessages(prev => [...prev, { role: 'gita', content: { solution: "I am consulting the heavens. Please try again in a moment, Arjuna.", verse_reference: "Patience", sloka_text: "", guidance: "Take a deep breath and center your mind." } }]);
+      const errorTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setMessages(prev => [...prev, { role: 'gita', content: { solution: "My wisdom is vast, but the connection is currently weak. Pray again in a moment, Arjuna.", verse_reference: "Patience", sloka_text: "", guidance: "Center your spirit and retry your query." }, timestamp: errorTimestamp }]);
     } finally {
       setIsTyping(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)] max-w-2xl mx-auto p-4 relative">
-      {/* Background decoration */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none flex items-center justify-center">
-        <i className="fa-solid fa-om text-[20rem]"></i>
+    <div className="flex flex-col h-[calc(100vh-14rem)] max-w-2xl mx-auto relative overflow-hidden">
+      {/* Background Watermark */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-[0.02] pointer-events-none z-0">
+        <i className="fa-solid fa-om text-[30rem]"></i>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-8 pb-10 scrollbar-hide z-10">
+      {/* Chat Messages Area */}
+      <div className="flex-1 overflow-y-auto space-y-12 px-4 pb-40 pt-10 z-10 no-scrollbar">
         {messages.length === 0 && (
-          <div className="text-center py-16 animate-fade-in flex flex-col items-center">
-            <div className="relative mb-8">
-              <div className="w-36 h-36 rounded-full overflow-hidden shadow-[0_10px_30px_rgba(244,196,48,0.4)] border-4 border-white ring-4 ring-orange-100">
+          <div className="text-center py-10 flex flex-col items-center animate-fade-in">
+            <div className="relative mb-14 group">
+              <div className="absolute inset-0 bg-orange-400 rounded-full blur-[80px] opacity-10 group-hover:opacity-20 transition-opacity"></div>
+              <div className="w-52 h-52 rounded-full overflow-hidden border-[12px] border-white bg-white relative z-10 shadow-2xl divine-aura">
                 <img 
-                  src={DIVINE_LOGO_URL} 
-                  alt="Divine Guidance" 
-                  className="w-full h-full object-cover scale-110" 
+                  src={DIVINE_LOGO_PATH} 
+                  alt="Divine Avatar" 
+                  className="w-full h-full object-cover scale-110 object-center transition-all duration-700" 
+                  onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
                 />
               </div>
-              <div className="absolute -bottom-2 -right-2 bg-saffron text-white rounded-full p-3 shadow-lg border-2 border-white">
-                <i className="fa-solid fa-wand-magic-sparkles text-sm"></i>
+              <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-stone-900 text-white px-8 py-3 rounded-full shadow-2xl border-2 border-stone-800 flex items-center gap-3 z-20">
+                <i className="fa-solid fa-wand-magic-sparkles text-orange-400"></i>
+                <span className="cinzel text-[11px] font-black uppercase tracking-[0.2em]">Sanctuary of Peace</span>
               </div>
             </div>
-            <h2 className="cinzel text-2xl font-bold text-stone-800 tracking-tight">Divine Consultation</h2>
-            <p className="text-stone-500 text-sm max-w-xs mx-auto mt-4 italic leading-relaxed">
-              "Whatever path people travel is My path. No matter where they go, they come to Me."
+            
+            <h2 className="cinzel text-4xl font-black text-stone-900 tracking-tighter mb-5">Seek Divine Counsel</h2>
+            <p className="text-stone-500 text-sm max-w-sm mx-auto italic leading-relaxed mb-12">
+              "Tell me your dilemmas, Arjuna. The words of the Gita shall light your way through the darkness."
             </p>
-            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
-              <button onClick={() => setInput("How do I find peace in stress?")} className="text-xs bg-white border border-orange-100 p-3 rounded-2xl text-stone-600 hover:bg-orange-50 transition-colors shadow-sm">"How do I find peace in stress?"</button>
-              <button onClick={() => setInput("What is the purpose of my work?")} className="text-xs bg-white border border-orange-100 p-3 rounded-2xl text-stone-600 hover:bg-orange-50 transition-colors shadow-sm">"What is the purpose of my work?"</button>
+            
+            <div className="grid grid-cols-1 gap-4 w-full max-w-md">
+              <p className="text-[10px] uppercase tracking-[0.5em] font-black text-orange-600/60 mb-2">Sacred Starting Points</p>
+              <button onClick={() => setInput("How do I stay calm in chaos?")} className="flex items-center gap-5 bg-white border border-orange-50 p-6 rounded-[2.5rem] text-left hover:border-orange-500 hover:shadow-xl transition-all group active:scale-95">
+                <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-all shadow-sm">
+                  <i className="fa-solid fa-wind text-lg"></i>
+                </div>
+                <span className="text-xs font-black text-stone-800 tracking-tight uppercase">Calmness in Crisis</span>
+              </button>
+              <button onClick={() => setInput("What is my true purpose in life?")} className="flex items-center gap-5 bg-white border border-orange-50 p-6 rounded-[2.5rem] text-left hover:border-orange-500 hover:shadow-xl transition-all group active:scale-95">
+                <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-all shadow-sm">
+                  <i className="fa-solid fa-compass text-lg"></i>
+                </div>
+                <span className="text-xs font-black text-stone-800 tracking-tight uppercase">Discovering Purpose</span>
+              </button>
             </div>
           </div>
         )}
@@ -76,72 +97,113 @@ const AskGita: React.FC = () => {
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
             {msg.role === 'user' ? (
-              <div className="bg-orange-600 text-white px-6 py-4 rounded-[2rem] rounded-tr-none shadow-lg max-w-[85%] text-sm font-medium border border-orange-500/20">
-                {msg.content}
+              <div className="flex flex-col items-end max-w-[85%] pr-2 group">
+                <div className="bg-gradient-to-br from-orange-500 to-orange-700 text-white px-8 py-6 rounded-[3rem] rounded-tr-none shadow-2xl shadow-orange-100 text-[15px] font-bold leading-relaxed border border-white/20">
+                  {msg.content}
+                </div>
+                <span className="text-[10px] text-stone-400 font-black mt-3 mr-4 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                  Sent • {msg.timestamp}
+                </span>
               </div>
             ) : (
-              <div className="flex gap-3 max-w-[95%] items-start">
-                <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-orange-200 shadow-md flex-shrink-0 mt-1">
-                   <img src={DIVINE_LOGO_URL} alt="Krishna" className="w-full h-full object-cover" />
+              <div className="flex gap-5 items-start max-w-[98%] group">
+                <div className="w-14 h-14 rounded-full overflow-hidden border-4 border-white shadow-2xl flex-shrink-0 bg-white ring-2 ring-orange-100 flex items-center justify-center mt-2 overflow-hidden divine-aura">
+                  <img 
+                    src={DIVINE_LOGO_PATH} 
+                    alt="Avatar" 
+                    className="w-full h-full object-cover scale-110" 
+                    onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
+                  />
                 </div>
-                <div className="bg-white border border-orange-100 p-6 rounded-[2.5rem] rounded-tl-none shadow-[0_10px_25px_-5px_rgba(0,0,0,0.05)] relative overflow-hidden backdrop-blur-sm bg-white/95">
-                  <div className="flex items-center justify-between mb-4 border-b border-orange-50 pb-2">
-                    <span className="cinzel text-[10px] font-bold text-orange-600 tracking-widest uppercase">Sacred Wisdom</span>
-                    <span className="text-[10px] font-bold text-stone-400 bg-stone-50 px-3 py-1 rounded-full border border-stone-100 uppercase tracking-tighter">Verse {msg.content.verse_reference}</span>
-                  </div>
-                  
-                  <p className="text-stone-800 leading-relaxed mb-6 text-base font-medium italic font-serif">
-                    {msg.content.solution}
-                  </p>
-                  
-                  {msg.content.sloka_text && (
-                    <div className="bg-orange-50/70 p-5 rounded-2xl border border-orange-100 mb-6 relative group">
-                      <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <p className="sanskrit text-xl text-stone-900 leading-relaxed text-center italic relative z-10">{msg.content.sloka_text}</p>
+                
+                <div className="flex flex-col gap-3 flex-1">
+                  <div className="bg-white border border-stone-100 rounded-[3rem] rounded-tl-none shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)] overflow-hidden">
+                    <div className="p-8 space-y-8">
+                      <div className="flex items-center justify-between border-b border-stone-50 pb-5">
+                        <div className="flex items-center gap-3">
+                           <div className="w-2 h-2 bg-orange-500 rounded-full animate-ping"></div>
+                           <span className="cinzel text-[11px] font-black text-stone-900 tracking-[0.25em] uppercase">Vani of the Lord</span>
+                        </div>
+                        <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-4 py-1.5 rounded-xl uppercase tracking-widest">Gita {msg.content.verse_reference}</span>
+                      </div>
+                      
+                      <p className="text-stone-900 leading-[1.8] text-[17px] font-medium font-serif italic relative">
+                        <i className="fa-solid fa-quote-left text-orange-100 absolute -top-4 -left-6 text-4xl opacity-50"></i>
+                        "{msg.content.solution}"
+                      </p>
+                      
+                      {msg.content.sloka_text && (
+                        <div className="bg-[#fffdf9] p-8 rounded-[2.5rem] border border-orange-100 shadow-inner relative group/sloka">
+                          <i className="fa-solid fa-om absolute top-4 right-6 text-orange-100 text-xl opacity-30 group-hover/sloka:scale-125 transition-transform"></i>
+                          <p className="sanskrit text-2xl md:text-3xl text-stone-900 leading-loose text-center italic">{msg.content.sloka_text}</p>
+                        </div>
+                      )}
+                      
+                      <div className="bg-stone-900 text-white p-7 rounded-[2.5rem] flex gap-5 items-start shadow-2xl border-l-8 border-orange-500 group/path">
+                        <div className="w-12 h-12 rounded-2xl bg-stone-800 flex items-center justify-center flex-shrink-0 text-orange-400 group-hover/path:rotate-12 transition-transform shadow-lg">
+                          <i className="fa-solid fa-dharmachakra text-2xl"></i>
+                        </div>
+                        <div className="space-y-1.5 flex-1">
+                          <h4 className="text-[10px] uppercase font-black tracking-[0.3em] text-orange-500 mb-1">Dharmic Prescription</h4>
+                          <p className="text-[14px] leading-relaxed opacity-95 text-stone-100 font-medium">{msg.content.guidance}</p>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  
-                  <div className="bg-stone-900 text-stone-100 p-5 rounded-2xl border-l-4 border-orange-500 shadow-xl flex gap-3 items-start">
-                    <i className="fa-solid fa-map-location-dot text-orange-400 mt-1"></i>
-                    <div>
-                       <h4 className="text-[10px] uppercase font-bold tracking-widest text-stone-500 mb-1">Divine Guidance</h4>
-                       <p className="text-[12px] leading-relaxed opacity-90">{msg.content.guidance}</p>
-                    </div>
                   </div>
+                  <span className="text-[10px] text-stone-400 font-black ml-6 mt-1 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                    <i className="fa-solid fa-clock text-[9px] mr-2"></i>
+                    Divine Insight • {msg.timestamp}
+                  </span>
                 </div>
               </div>
             )}
           </div>
         ))}
         {isTyping && (
-          <div className="flex justify-start items-center gap-4 animate-pulse">
-            <div className="w-10 h-10 rounded-full border-2 border-stone-100 bg-stone-50 flex items-center justify-center">
-               <i className="fa-solid fa-feather-pointed text-stone-300"></i>
+          <div className="flex justify-start items-center gap-6 pl-6 animate-pulse">
+            <div className="w-14 h-14 rounded-full border-4 border-white bg-white flex items-center justify-center shadow-lg divine-aura overflow-hidden">
+               <img src={DIVINE_LOGO_PATH} alt="Loading Krishna" className="w-full h-full object-cover scale-110" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             </div>
-            <div className="bg-white border border-orange-100 px-6 py-3 rounded-2xl italic text-stone-400 text-xs shadow-sm">
-              Krishna is preparing your path...
+            <div className="bg-white/80 backdrop-blur-sm border border-orange-50 px-8 py-5 rounded-[2rem] italic text-stone-400 text-[12px] font-bold tracking-wide shadow-sm">
+              Krishna is preparing your guidance...
             </div>
           </div>
         )}
         <div ref={endOfChatRef} />
       </div>
 
-      <form onSubmit={handleSend} className="mt-4 flex gap-3 p-3 bg-white border border-orange-100 rounded-[2.5rem] shadow-[0_15px_40px_-10px_rgba(244,196,48,0.2)] relative z-20">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Speak your heart's dilemma..."
-          className="flex-1 bg-stone-50 border-none rounded-[1.8rem] px-6 py-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all placeholder:text-stone-400"
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || isTyping}
-          className="w-14 h-14 bg-orange-600 text-white rounded-[1.5rem] flex items-center justify-center hover:bg-orange-700 transition-all shadow-xl active:scale-95 disabled:opacity-50 disabled:grayscale"
+      {/* Floating Sacred Input Bar with Logo */}
+      <div className="fixed bottom-28 left-0 right-0 px-6 z-50">
+        <form 
+          onSubmit={handleSend} 
+          className="max-w-2xl mx-auto flex items-center gap-4 p-3 bg-white/90 backdrop-blur-3xl border border-white rounded-[4rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.2)] ring-1 ring-orange-50 focus-within:ring-orange-400 focus-within:ring-2 transition-all group"
         >
-          <i className="fa-solid fa-paper-plane-top text-xl"></i>
-        </button>
-      </form>
+          <div className="flex items-center justify-center pl-3">
+             <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-orange-100 shadow-sm bg-white flex items-center justify-center transition-all group-focus-within:scale-110 group-focus-within:border-orange-300">
+                <img 
+                  src={DIVINE_LOGO_PATH} 
+                  alt="Input Logo" 
+                  className="w-full h-full object-cover scale-110"
+                  onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
+                />
+             </div>
+          </div>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Share your problem... e.g., 'How to find peace?'"
+            className="flex-1 bg-transparent border-none rounded-[1.8rem] px-2 py-4 text-[16px] font-bold focus:outline-none placeholder:text-stone-300 placeholder:font-medium italic"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isTyping}
+            className="w-14 h-14 bg-stone-900 text-white rounded-full flex items-center justify-center hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-20 disabled:grayscale"
+          >
+            <i className="fa-solid fa-paper-plane text-xl"></i>
+          </button>
+        </form>
+      </div>
     </div>
   );
 };

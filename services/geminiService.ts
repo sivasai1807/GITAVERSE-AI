@@ -1,28 +1,26 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AppLanguage, VerseContent, AudioScript, DailyQuote, DailyStory, ChapterIntro, DiscoverContent, GitaResponse, UXText } from "../types";
+import { AppLanguage, VerseContent, AudioScript, DailyQuote, DailyStory, ChapterIntro, DiscoverContent, UXText } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const SYSTEM_INSTRUCTION = `You are GitaVerse AI, the divine voice of Bhagavad Gita. 
-Your mission: Solve modern human problems using eternal Vedic wisdom.
+const SYSTEM_INSTRUCTION = `You are GitaVerse AI, a divine knowledge assistant representing the Bhagavad Gita.
+Your role:
+- Preserve the authenticity of the Bhagavad Gita.
+- Generate all chapters and verses accurately.
+- Provide Bhavam (meaning) and Application Stories in simple, spiritual, and practical language.
+- CRITICAL: All explanations, bhavams, stories, and moral lessons MUST be generated in the user's SELECTED LANGUAGE (e.g., if they select Hindi, explain everything in Hindi).
+- Generate audio-ready text for slokas and meanings.
 
-Core Directives:
-1. RESPONSE LANGUAGE: Always respond in the EXACT language the user types in (Hindi, English, etc.).
-2. SPELLING: Automatically correct user spelling errors and provide a perfect, grammatically correct response.
-3. AUTHENTICITY: Never hallucinate slokas. Use Chapter and Verse numbers.
-4. TONE: Divine yet relatable. Like Krishna speaking to Arjuna on the battlefield.
-5. ASK GITA: When a user shares a problem, provide:
-   - A relatable solution.
-   - A specific verse reference (Sloka).
-   - Practical steps to implement the teaching.
+Your personality:
+- Calm, Respectful, Devotional but practical, Simple and clear.
 
-Sloka Delivery:
-- Sanskrit slokas must be perfect.
-- Bhavams (meanings) must be deep yet simple.
-- Application Stories: Create high-impact, short stories (Modern Leelas).
-- Inner Mirror: A powerful psychological question for the user.`;
+Rules:
+- NEVER change or fabricate Sanskrit slokas.
+- All fields except 'sanskrit_sloka' and 'transliteration' must be strictly in the requested target language.
+- For the 'application_story', create a relatable modern-day scenario that perfectly illustrates the verse's teaching.`;
 
+// PCM Decoding Utilities
 function decodeBase64(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
@@ -32,52 +30,31 @@ function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-// Improved audio decoding to handle PCM data safely
-export async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-  const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-  const channelData = buffer.getChannelData(0);
-  for (let i = 0; i < dataInt16.length; i++) {
-    channelData[i] = dataInt16[i] / 32768.0;
+export async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number = 24000,
+  numChannels: number = 1
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
   }
   return buffer;
-}
-
-/**
- * Wraps PCM data in a WAV header so it can be downloaded and played in standard players.
- */
-export function createWavBlob(pcmData: Uint8Array, sampleRate: number = 24000): Blob {
-  const header = new ArrayBuffer(44);
-  const view = new DataView(header);
-
-  const writeString = (offset: number, string: string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-
-  writeString(0, 'RIFF');
-  view.setUint32(4, 32 + pcmData.length, true);
-  writeString(8, 'WAVE');
-  writeString(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM format
-  view.setUint16(22, 1, true); // Mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true); // Byte rate
-  view.setUint16(32, 2, true); // Block align
-  view.setUint16(34, 16, true); // Bits per sample
-  writeString(36, 'data');
-  view.setUint32(40, pcmData.length, true);
-
-  return new Blob([header, pcmData], { type: 'audio/wav' });
 }
 
 export const geminiService = {
   async getVerseContent(chapterNum: number, verseNum: number, lang: AppLanguage): Promise<VerseContent> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Gita Ch ${chapterNum} Verse ${verseNum} in ${lang}. Focus on modern story and inner mirror question.`,
+      contents: `Provide Bhagavad Gita content for Chapter ${chapterNum}, Verse ${verseNum}. The response MUST be in ${lang}. 
+      The 'application_story' should be a modern real-life example of this verse in action.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
@@ -88,31 +65,8 @@ export const geminiService = {
             transliteration: { type: Type.STRING },
             bhavam: { type: Type.STRING },
             application_story: { type: Type.STRING },
-            inner_mirror: { type: Type.STRING },
           },
-          required: ["sanskrit_sloka", "transliteration", "bhavam", "application_story", "inner_mirror"],
-        }
-      }
-    });
-    return JSON.parse(response.text);
-  },
-
-  async askGita(problem: string): Promise<GitaResponse> {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `User Problem: "${problem}". Provide a solution based on Bhagavad Gita in the user's input language.`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            solution: { type: Type.STRING },
-            verse_reference: { type: Type.STRING },
-            sloka_text: { type: Type.STRING },
-            guidance: { type: Type.STRING },
-          },
-          required: ["solution", "verse_reference", "sloka_text", "guidance"],
+          required: ["sanskrit_sloka", "transliteration", "bhavam", "application_story"],
         }
       }
     });
@@ -122,37 +76,17 @@ export const geminiService = {
   async getAudioScript(chapterNum: number, verseNum: number, lang: AppLanguage): Promise<AudioScript> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `TTS script for Ch ${chapterNum} V ${verseNum} in ${lang}. Include sloka pronunciation and meaning.`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: { audio_script: { type: Type.STRING } },
-          required: ["audio_script"],
-        }
-      }
-    });
-    return JSON.parse(response.text);
-  },
-
-  async getUXText(lang: AppLanguage): Promise<UXText> {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `UI labels in ${lang}.`,
+      contents: `Generate an audio narration script for Chapter ${chapterNum}, Verse ${verseNum} in ${lang}. 
+      The script should include the Sanskrit Sloka first, then a pause, then the meaning in ${lang}.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            tagline: { type: Type.STRING },
-            quote_title: { type: Type.STRING },
-            read_heading: { type: Type.STRING },
-            discover_heading: { type: Type.STRING },
-            ask_heading: { type: Type.STRING },
+            audio_script: { type: Type.STRING },
           },
-          required: ["tagline", "quote_title", "read_heading", "discover_heading", "ask_heading"],
+          required: ["audio_script"],
         }
       }
     });
@@ -162,7 +96,7 @@ export const geminiService = {
   async getDailyQuote(lang: AppLanguage): Promise<DailyQuote> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Provide a unique daily Bhagavad Gita quote in ${lang}.`,
+      contents: `Daily Bhagavad Gita Quote in ${lang}. Everything except sloka must be in ${lang}.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
@@ -183,7 +117,7 @@ export const geminiService = {
   async getDailyStory(lang: AppLanguage): Promise<DailyStory> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Modern Leela story in ${lang}.`,
+      contents: `Short spiritual story in ${lang} based on Gita.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
@@ -204,14 +138,18 @@ export const geminiService = {
   async getChapterIntro(chapterNum: number, lang: AppLanguage): Promise<ChapterIntro> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Ch ${chapterNum} summary in ${lang}.`,
+      contents: `Chapter ${chapterNum} intro in ${lang}.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
-          properties: { chapter_summary: { type: Type.STRING } },
-          required: ["chapter_summary"],
+          properties: {
+            chapter_summary: { type: Type.STRING },
+            core_theme: { type: Type.STRING },
+            spiritual_takeaway: { type: Type.STRING },
+          },
+          required: ["chapter_summary", "core_theme", "spiritual_takeaway"],
         }
       }
     });
@@ -221,19 +159,42 @@ export const geminiService = {
   async getDiscoverContent(): Promise<DiscoverContent> {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Gita discovery content.`,
+      contents: `Discover section content.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
+            videos: { type: Type.ARRAY, items: { type: Type.STRING } },
+            articles: { type: Type.ARRAY, items: { type: Type.STRING } },
             meditations: { type: Type.ARRAY, items: { type: Type.STRING } },
             topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-            articles: { type: Type.ARRAY, items: { type: Type.STRING } },
-            videos: { type: Type.ARRAY, items: { type: Type.STRING } },
           },
-          required: ["meditations", "topics", "articles", "videos"],
+          required: ["videos", "articles", "meditations", "topics"],
+        }
+      }
+    });
+    return JSON.parse(response.text);
+  },
+
+  async getUXText(lang: AppLanguage): Promise<UXText> {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `UX text in ${lang}.`,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            tagline: { type: Type.STRING },
+            quote_title: { type: Type.STRING },
+            read_heading: { type: Type.STRING },
+            discover_heading: { type: Type.STRING },
+            empty_message: { type: Type.STRING },
+          },
+          required: ["tagline", "quote_title", "read_heading", "discover_heading", "empty_message"],
         }
       }
     });
@@ -244,17 +205,23 @@ export const geminiService = {
     try {
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Read with perfect Vedic resonance: ${text}` }] }],
+        contents: [{ parts: [{ text }] }],
         config: {
           responseModalities: ['AUDIO'],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
           },
         },
       });
       const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      return base64 ? decodeBase64(base64) : undefined;
+      if (base64) {
+        return decodeBase64(base64);
+      }
+      return undefined;
     } catch (error) {
+      console.error("TTS failed:", error);
       return undefined;
     }
   }

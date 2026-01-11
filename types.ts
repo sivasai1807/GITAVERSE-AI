@@ -13,7 +13,6 @@ export interface VerseContent {
   transliteration: string;
   bhavam: string;
   application_story: string;
-  inner_mirror: string; // Creative reflection question
 }
 
 export interface AudioScript {
@@ -34,20 +33,15 @@ export interface DailyStory {
 
 export interface ChapterIntro {
   chapter_summary: string;
+  core_theme: string;
+  spiritual_takeaway: string;
 }
 
 export interface DiscoverContent {
+  videos: string[];
+  articles: string[];
   meditations: string[];
   topics: string[];
-  articles: string[];
-  videos: string[];
-}
-
-export interface GitaResponse {
-  solution: string;
-  verse_reference: string;
-  sloka_text: string;
-  guidance: string;
 }
 
 export interface UXText {
@@ -55,13 +49,12 @@ export interface UXText {
   quote_title: string;
   read_heading: string;
   discover_heading: string;
-  ask_heading: string;
+  empty_message: string;
 }
 
 export enum ViewState {
   HOME = 'HOME',
   READ = 'READ',
-  ASK_GITA = 'ASK_GITA',
   DISCOVER = 'DISCOVER',
   LANGUAGE_SELECT = 'LANGUAGE_SELECT'
 }

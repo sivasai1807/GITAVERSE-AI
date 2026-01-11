@@ -22,24 +22,13 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
 
   useEffect(() => {
-    if (selectedChapter && !selectedVerseNum) {
-      loadChapterIntro();
-    }
-    if (selectedChapter && selectedVerseNum) {
-      loadVerseContent();
-    }
-    
-    return () => {
-      stopAudio();
-    };
+    if (selectedChapter && !selectedVerseNum) loadChapterIntro();
+    if (selectedChapter && selectedVerseNum) loadVerseContent();
+    return () => stopAudio();
   }, [selectedChapter, selectedVerseNum, language]);
 
   const stopAudio = () => {
-    if (sourceNodeRef.current) {
-      try {
-        sourceNodeRef.current.stop();
-      } catch (e) {}
-    }
+    if (sourceNodeRef.current) try { sourceNodeRef.current.stop(); } catch (e) {}
     setIsAudioPlaying(false);
   };
 
@@ -49,11 +38,8 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
     try {
       const intro = await geminiService.getChapterIntro(selectedChapter.chapter_number, language);
       setChapterIntro(intro);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
   const loadVerseContent = async () => {
@@ -61,116 +47,86 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
     setLoading(true);
     setAudioScript(null);
     try {
-      const content = await geminiService.getVerseContent(selectedChapter.chapter_number, selectedVerseNum, language);
-      const script = await geminiService.getAudioScript(selectedChapter.chapter_number, selectedVerseNum, language);
+      // Fetch in parallel for < 2s performance
+      const [content, script] = await Promise.all([
+        geminiService.getVerseContent(selectedChapter.chapter_number, selectedVerseNum, language),
+        geminiService.getAudioScript(selectedChapter.chapter_number, selectedVerseNum, language)
+      ]);
       setVerseData(content);
       setAudioScript(script);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
   const playVerseAudio = async () => {
     if (!verseData || !audioScript) return;
-    
-    if (isAudioPlaying) {
-      stopAudio();
-      return;
-    }
-
+    if (isAudioPlaying) { stopAudio(); return; }
     setIsAudioPlaying(true);
-    
     try {
-      // Initialize AudioContext on first user interaction
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      }
-      
+      if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
       const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-
+      if (ctx.state === 'suspended') await ctx.resume();
       const pcmData = await geminiService.generateTTS(audioScript.audio_script);
       if (pcmData) {
-        const audioBuffer = await decodeAudioData(pcmData, ctx, 24000, 1);
+        const audioBuffer = await decodeAudioData(pcmData, ctx);
         const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(ctx.destination);
         source.onended = () => setIsAudioPlaying(false);
         source.start(0);
         sourceNodeRef.current = source;
-      } else {
-        setIsAudioPlaying(false);
-      }
-    } catch (error) {
-      console.error("Audio playback error:", error);
-      setIsAudioPlaying(false);
-    }
+      } else setIsAudioPlaying(false);
+    } catch (error) { setIsAudioPlaying(false); }
   };
 
   const renderChapters = () => (
-    <div className="grid grid-cols-1 gap-3">
+    <div className="grid grid-cols-1 gap-4 animate-fade-in p-2">
       {GITA_CHAPTERS.map((ch) => (
         <button
           key={ch.chapter_number}
           onClick={() => setSelectedChapter(ch)}
-          className="bg-white p-4 rounded-2xl border border-orange-100 flex items-center justify-between group hover:border-orange-400 transition-all shadow-sm"
+          className="bg-white p-5 rounded-3xl border border-orange-100 flex items-center justify-between group hover:border-orange-500 hover:shadow-xl transition-all"
         >
-          <div className="flex items-center gap-4">
-            <span className="w-10 h-10 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center font-bold cinzel border border-orange-100">
+          <div className="flex items-center gap-5">
+            <span className="w-12 h-12 bg-orange-600 text-white rounded-2xl flex items-center justify-center font-bold cinzel text-lg shadow-lg rotate-3 group-hover:rotate-0 transition-transform">
               {ch.chapter_number}
             </span>
             <div className="text-left">
-              <h4 className="cinzel font-bold text-stone-800 text-sm">{ch.chapter_name_sanskrit}</h4>
-              <p className="text-[10px] text-stone-500 uppercase tracking-widest">{ch.chapter_name_english}</p>
+              <h4 className="cinzel font-bold text-stone-800 text-sm tracking-tight">{ch.chapter_name_sanskrit}</h4>
+              <p className="text-[10px] text-stone-500 uppercase tracking-widest font-bold mt-1">{ch.chapter_name_english}</p>
             </div>
           </div>
-          <div className="text-right flex items-center gap-2">
-            <span className="text-[10px] text-stone-400 font-bold">{ch.total_verses} Verses</span>
-            <i className="fa-solid fa-chevron-right text-stone-300 group-hover:text-orange-600 transition-colors"></i>
-          </div>
+          <i className="fa-solid fa-arrow-right-long text-stone-300 group-hover:text-orange-600 group-hover:translate-x-1 transition-all"></i>
         </button>
       ))}
     </div>
   );
 
   const renderVerseGrid = () => (
-    <div className="space-y-6">
-      <button 
-        onClick={() => { setSelectedChapter(null); setChapterIntro(null); }}
-        className="flex items-center gap-2 text-stone-500 hover:text-orange-600 mb-4"
-      >
-        <i className="fa-solid fa-arrow-left text-xs"></i>
-        <span className="cinzel text-xs font-bold">All Chapters</span>
+    <div className="space-y-6 animate-fade-in">
+      <button onClick={() => { setSelectedChapter(null); setChapterIntro(null); }} className="flex items-center gap-2 text-stone-500 hover:text-orange-600 mb-2 font-bold uppercase text-[10px] tracking-widest">
+        <i className="fa-solid fa-chevron-left text-xs"></i> All Chapters
       </button>
 
-      <div className="bg-orange-600 text-white p-6 rounded-3xl shadow-lg">
-        <h2 className="cinzel text-xl font-bold mb-1">{selectedChapter?.chapter_name_sanskrit}</h2>
-        <p className="opacity-80 text-xs mb-4 uppercase tracking-widest">{selectedChapter?.chapter_name_english}</p>
-        
-        {loading ? (
-          <div className="animate-pulse h-12 bg-orange-500 rounded-xl"></div>
-        ) : chapterIntro && (
-          <div className="text-sm space-y-3">
-            <p className="font-medium opacity-90">{chapterIntro.chapter_summary}</p>
-            <div className="flex flex-wrap gap-2 pt-2">
-              <span className="bg-white/20 px-2 py-1 rounded text-[10px] font-bold">Theme: {chapterIntro.core_theme}</span>
-            </div>
-          </div>
+      <div className="bg-gradient-to-br from-orange-600 to-orange-700 text-white p-8 rounded-3xl shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-10">
+          <i className="fa-solid fa-om text-8xl"></i>
+        </div>
+        <h2 className="cinzel text-2xl font-bold mb-1">{selectedChapter?.chapter_name_sanskrit}</h2>
+        <p className="opacity-70 text-[10px] mb-6 uppercase tracking-[0.2em] font-bold">{selectedChapter?.chapter_name_english}</p>
+        {loading ? <div className="animate-pulse h-16 bg-white/10 rounded-2xl"></div> : chapterIntro && (
+          <p className="text-sm font-medium leading-relaxed opacity-95">{chapterIntro.chapter_summary}</p>
         )}
       </div>
 
-      <div>
-        <h3 className="cinzel text-sm font-bold text-stone-500 mb-4 uppercase tracking-widest">Select Verse</h3>
-        <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
+      <div className="bg-white p-6 rounded-3xl border border-orange-100">
+        <h3 className="cinzel text-xs font-bold text-stone-400 mb-6 uppercase tracking-widest text-center">Select Passage</h3>
+        <div className="grid grid-cols-6 sm:grid-cols-10 gap-2">
           {Array.from({ length: selectedChapter?.total_verses || 0 }, (_, i) => i + 1).map((v) => (
             <button
               key={v}
               onClick={() => setSelectedVerseNum(v)}
-              className="aspect-square bg-white rounded-lg border border-orange-100 flex items-center justify-center text-sm font-bold hover:bg-orange-600 hover:text-white transition-colors"
+              className="aspect-square bg-orange-50 rounded-xl border border-orange-100 flex items-center justify-center text-xs font-bold text-orange-700 hover:bg-orange-600 hover:text-white hover:scale-110 transition-all shadow-sm"
             >
               {v}
             </button>
@@ -181,65 +137,65 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
   );
 
   const renderVerseDetail = () => (
-    <div className="space-y-6 max-w-2xl mx-auto pb-12">
-      <button 
-        onClick={() => { setSelectedVerseNum(null); setVerseData(null); stopAudio(); }}
-        className="flex items-center gap-2 text-stone-500 hover:text-orange-600 mb-4"
-      >
-        <i className="fa-solid fa-arrow-left text-xs"></i>
-        <span className="cinzel text-xs font-bold">Back to Verses</span>
-      </button>
-
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="cinzel text-sm font-bold text-orange-600 tracking-widest uppercase">
-          CH {selectedChapter?.chapter_number} • Verse {selectedVerseNum}
-        </h2>
+    <div className="space-y-8 animate-fade-in pb-12">
+      <div className="flex items-center justify-between">
+        <button onClick={() => { setSelectedVerseNum(null); setVerseData(null); stopAudio(); }} className="flex items-center gap-2 text-stone-500 font-bold uppercase text-[10px] tracking-widest hover:text-orange-600">
+          <i className="fa-solid fa-chevron-left text-xs"></i> Verses
+        </button>
         <button 
           onClick={playVerseAudio}
           disabled={loading || !audioScript}
-          className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${isAudioPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-orange-600 text-white hover:scale-105 active:scale-95 disabled:opacity-50'}`}
+          className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all ${isAudioPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-orange-600 text-white hover:scale-105 active:scale-95 disabled:opacity-50'}`}
         >
-          <i className={`fa-solid ${isAudioPlaying ? 'fa-stop' : 'fa-play'} text-lg ml-0.5`}></i>
+          <i className={`fa-solid ${isAudioPlaying ? 'fa-pause' : 'fa-play'} text-xl ml-0.5`}></i>
         </button>
       </div>
 
       {loading ? (
-        <div className="space-y-6">
-          <div className="h-24 bg-stone-100 rounded-2xl animate-pulse"></div>
-          <div className="h-40 bg-stone-100 rounded-2xl animate-pulse"></div>
+        <div className="space-y-8">
+          <div className="h-40 bg-white border border-orange-100 rounded-3xl animate-pulse"></div>
+          <div className="h-60 bg-white border border-orange-100 rounded-3xl animate-pulse"></div>
         </div>
       ) : verseData && (
-        <div className="space-y-8 animate-fade-in">
-          <section className="text-center p-8 bg-white border border-orange-100 rounded-3xl shadow-sm">
-            <p className="sanskrit text-2xl md:text-3xl font-medium text-stone-900 leading-relaxed mb-6">
+        <div className="space-y-8">
+          <section className="text-center p-10 bg-white border border-orange-100 rounded-[2.5rem] shadow-sm relative">
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg">
+              Verse {selectedVerseNum}
+            </div>
+            <p className="sanskrit text-2xl md:text-3xl font-medium text-stone-900 leading-[1.8] mb-6">
               {verseData.sanskrit_sloka}
             </p>
-            <div className="w-12 h-0.5 bg-orange-200 mx-auto mb-6"></div>
-            <p className="text-xs text-stone-400 font-mono italic tracking-wide">
+            <p className="text-[10px] text-stone-400 font-mono tracking-widest italic opacity-60">
               {verseData.transliteration}
             </p>
           </section>
 
-          <section className="bg-white p-6 rounded-3xl border border-orange-50 shadow-sm">
-            <h3 className="cinzel text-xs font-bold text-orange-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <i className="fa-solid fa-book-open-reader"></i>
-              Bhavam (Meaning)
+          <section className="bg-white p-8 rounded-[2rem] border border-orange-50 shadow-sm">
+            <h3 className="cinzel text-[10px] font-bold text-orange-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <i className="fa-solid fa-feather-pointed"></i> Divine Meaning
             </h3>
-            <p className="text-stone-800 leading-relaxed text-lg italic">
+            <p className="text-stone-800 leading-relaxed text-lg italic font-medium">
               {verseData.bhavam}
             </p>
           </section>
 
-          <section className="bg-stone-900 text-stone-100 p-8 rounded-3xl shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <i className="fa-solid fa-scroll text-6xl"></i>
-            </div>
+          <section className="bg-stone-900 text-stone-100 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
              <div className="flex items-center gap-2 mb-4">
-              <i className="fa-solid fa-lightbulb text-orange-400"></i>
-              <h3 className="cinzel text-sm font-bold uppercase tracking-widest">Real-Life Application</h3>
+              <i className="fa-solid fa-film text-orange-400"></i>
+              <h3 className="cinzel text-[10px] font-bold uppercase tracking-[0.2em]">Modern Life Leela (Story)</h3>
             </div>
-            <p className="text-stone-300 leading-relaxed text-base">
+            <p className="text-stone-300 leading-relaxed text-base italic opacity-90">
               {verseData.application_story}
+            </p>
+          </section>
+
+          <section className="bg-gradient-to-r from-orange-500 to-amber-500 p-8 rounded-[2rem] text-white shadow-xl">
+             <div className="flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-eye text-white"></i>
+              <h3 className="cinzel text-[10px] font-bold uppercase tracking-[0.2em]">Inner Mirror</h3>
+            </div>
+            <p className="text-lg font-bold tracking-tight">
+              {verseData.inner_mirror}
             </p>
           </section>
         </div>

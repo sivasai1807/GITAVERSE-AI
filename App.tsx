@@ -6,6 +6,7 @@ import { geminiService } from './services/geminiService';
 import Home from './components/Home';
 import Read from './components/Read';
 import Discover from './components/Discover';
+import AskGita from './components/AskGita';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.LANGUAGE_SELECT);
@@ -40,16 +41,16 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-orange-50">
         <div className="text-center mb-12">
-          <i className="fa-solid fa-om text-6xl text-orange-600 mb-4"></i>
-          <h1 className="cinzel text-4xl font-bold text-stone-800 mb-2">GitaVerse AI</h1>
-          <p className="text-stone-600">Select your divine language of study</p>
+          <i className="fa-solid fa-om text-6xl text-orange-600 mb-4 animate-pulse"></i>
+          <h1 className="cinzel text-4xl font-bold text-stone-800 mb-2 tracking-tighter">GitaVerse AI</h1>
+          <p className="text-stone-600 text-sm font-medium">Divine Wisdom Awaits</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl w-full">
           {APP_LANGUAGES.map((lang) => (
             <button
               key={lang}
               onClick={() => selectLanguage(lang as AppLanguage)}
-              className="p-4 bg-white border border-orange-200 rounded-xl shadow-sm hover:shadow-md hover:bg-orange-600 hover:text-white transition-all cinzel text-sm"
+              className="p-4 bg-white border border-orange-200 rounded-2xl shadow-sm hover:shadow-lg hover:border-orange-500 hover:scale-105 transition-all cinzel text-xs font-bold"
             >
               {lang}
             </button>
@@ -60,52 +61,36 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pb-20">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-orange-100 px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col pb-20 bg-[#fffaf5]">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-orange-100 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <i className="fa-solid fa-om text-orange-600 text-2xl"></i>
           <div>
-            <h1 className="cinzel text-lg font-bold leading-none">GitaVerse</h1>
-            <p className="text-[10px] text-stone-500 tracking-widest uppercase">Divine Assistant</p>
+            <h1 className="cinzel text-lg font-bold leading-none tracking-tight">GitaVerse</h1>
+            <p className="text-[9px] text-stone-500 tracking-widest uppercase font-bold">Divine Intelligence</p>
           </div>
         </div>
         <button 
           onClick={() => setCurrentView(ViewState.LANGUAGE_SELECT)}
-          className="text-stone-500 text-sm flex items-center gap-1 hover:text-orange-600"
+          className="px-3 py-1.5 bg-orange-50 border border-orange-100 rounded-full text-stone-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-orange-100"
         >
           <i className="fa-solid fa-globe"></i>
           {language}
         </button>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1">
+      <main className="flex-1 overflow-x-hidden">
         {currentView === ViewState.HOME && <Home language={language} uxText={uxText} />}
         {currentView === ViewState.READ && <Read language={language} uxText={uxText} />}
+        {currentView === ViewState.ASK_GITA && <AskGita />}
         {currentView === ViewState.DISCOVER && <Discover />}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-orange-100 flex justify-around items-center h-16 px-4 z-50">
-        <NavButton 
-          active={currentView === ViewState.HOME} 
-          onClick={() => setCurrentView(ViewState.HOME)} 
-          icon="fa-house" 
-          label="Home" 
-        />
-        <NavButton 
-          active={currentView === ViewState.READ} 
-          onClick={() => setCurrentView(ViewState.READ)} 
-          icon="fa-book-open" 
-          label="Read" 
-        />
-        <NavButton 
-          active={currentView === ViewState.DISCOVER} 
-          onClick={() => setCurrentView(ViewState.DISCOVER)} 
-          icon="fa-compass" 
-          label="Discover" 
-        />
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-orange-100 flex justify-around items-center h-20 px-4 z-50 shadow-2xl">
+        <NavButton active={currentView === ViewState.HOME} onClick={() => setCurrentView(ViewState.HOME)} icon="fa-house" label="Home" />
+        <NavButton active={currentView === ViewState.READ} onClick={() => setCurrentView(ViewState.READ)} icon="fa-book-quran" label="Gita" />
+        <NavButton active={currentView === ViewState.ASK_GITA} onClick={() => setCurrentView(ViewState.ASK_GITA)} icon="fa-comment-sparkles" label="Ask Gita" />
+        <NavButton active={currentView === ViewState.DISCOVER} onClick={() => setCurrentView(ViewState.DISCOVER)} icon="fa-compass" label="Pathways" />
       </nav>
     </div>
   );
@@ -114,10 +99,12 @@ const App: React.FC = () => {
 const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: string; label: string }> = ({ active, onClick, icon, label }) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center gap-1 transition-colors ${active ? 'text-orange-600' : 'text-stone-400 hover:text-stone-600'}`}
+    className={`flex flex-col items-center gap-1.5 transition-all ${active ? 'text-orange-600 scale-110' : 'text-stone-400 hover:text-stone-600'}`}
   >
-    <i className={`fa-solid ${icon} text-lg`}></i>
-    <span className="text-[10px] font-bold uppercase tracking-tighter">{label}</span>
+    <div className={`p-2.5 rounded-xl transition-colors ${active ? 'bg-orange-50' : 'bg-transparent'}`}>
+      <i className={`fa-solid ${icon} text-lg`}></i>
+    </div>
+    <span className="text-[9px] font-bold uppercase tracking-widest">{label}</span>
   </button>
 );
 

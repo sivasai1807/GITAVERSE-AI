@@ -1,0 +1,7 @@
+{
+  "name": "GitaVerse AI",
+  "description": "A divine knowledge assistant for the Bhagavad Gita, providing accurate verses, spiritual meanings, and daily guidance in multiple languages.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

@@ -37,16 +37,11 @@ const Home: React.FC<HomeProps> = ({ language, uxText }) => {
 
   const handleShare = async (title: string, text: string) => {
     if (navigator.share) {
-      // Fix for "Invalid URL" error: ensure the URL is absolute and valid
       let shareUrl = window.location.origin;
       try {
         const urlObj = new URL(window.location.href);
-        if (urlObj.protocol.startsWith('http')) {
-          shareUrl = window.location.href;
-        }
-      } catch (e) {
-        shareUrl = "https://gitaverse.ai"; // Fallback placeholder
-      }
+        if (urlObj.protocol.startsWith('http')) shareUrl = window.location.href;
+      } catch (e) { shareUrl = "https://gitaverse.ai"; }
 
       try {
         await navigator.share({
@@ -54,9 +49,7 @@ const Home: React.FC<HomeProps> = ({ language, uxText }) => {
           text: `${text}\n\nShared via GitaVerse AI`,
           url: shareUrl,
         });
-      } catch (err) {
-        console.error("Share failed", err);
-      }
+      } catch (err) { console.error("Share failed", err); }
     } else {
       alert("Sharing is not supported on this browser.");
     }
@@ -72,74 +65,94 @@ const Home: React.FC<HomeProps> = ({ language, uxText }) => {
   }
 
   return (
-    <div className="p-4 space-y-6 max-w-3xl mx-auto pb-8 animate-fade-in">
-      <section className="text-center py-6 bg-gradient-to-b from-orange-50 to-transparent rounded-3xl">
-        <h2 className="cinzel text-2xl font-bold text-stone-800 mb-2">
+    <div className="p-4 space-y-6 max-w-2xl mx-auto pb-12 animate-fade-in">
+      <section className="text-center py-10">
+        <h2 className="cinzel text-3xl font-black text-stone-900 mb-3 tracking-tighter">
           {uxText?.tagline || "Peace be with you."}
         </h2>
-        <div className="w-16 h-1 bg-orange-200 mx-auto rounded-full"></div>
+        <div className="flex justify-center items-center gap-3">
+          <div className="h-px w-8 bg-orange-200"></div>
+          <p className="text-orange-600 text-[10px] font-black uppercase tracking-[0.3em]">Eternal Bliss</p>
+          <div className="h-px w-8 bg-orange-200"></div>
+        </div>
       </section>
 
       {errorMsg && (
-        <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex items-center gap-3 text-orange-800 text-sm">
-           <i className="fa-solid fa-hourglass-half animate-spin text-orange-500"></i>
-           <p className="font-medium italic">{errorMsg}</p>
+        <div className="bg-orange-50 border border-orange-200 p-6 rounded-[2rem] flex items-center gap-4 text-orange-800 text-sm shadow-sm">
+           <i className="fa-solid fa-hourglass-half animate-spin text-orange-500 text-xl"></i>
+           <p className="font-bold italic">{errorMsg}</p>
         </div>
       )}
 
       {quote && (
-        <section className="bg-white border border-orange-100 rounded-3xl shadow-sm overflow-hidden p-6 relative group">
-          <div className="absolute top-4 right-4 flex gap-2">
+        <section className="bg-white border border-orange-50 rounded-[3rem] shadow-2xl shadow-orange-100 overflow-hidden p-10 relative group transition-all duration-500 hover:scale-[1.01]">
+          <div className="absolute top-6 right-8 flex gap-2">
              <button 
               onClick={() => handleShare("Daily Inspiration", `${quote.sanskrit_sloka}\n\n${quote.bhavam}`)}
-              className="w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-orange-600 hover:text-white"
+              className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-orange-600 hover:text-white shadow-sm"
             >
-              <i className="fa-solid fa-share-nodes text-sm"></i>
+              <i className="fa-solid fa-share-nodes text-base"></i>
             </button>
-            <i className="fa-solid fa-quote-right text-orange-100 text-6xl opacity-30"></i>
           </div>
-          <h3 className="cinzel text-xs font-bold text-orange-600 uppercase tracking-widest mb-4">
-            {uxText?.quote_title || "Daily Inspiration"}
-          </h3>
-          <p className="sanskrit text-lg font-medium text-stone-900 mb-4 leading-relaxed italic">
+          
+          <div className="mb-10">
+            <div className="w-12 h-1 bg-orange-100 rounded-full mb-4"></div>
+            <h3 className="cinzel text-[11px] font-black text-orange-600 uppercase tracking-widest">
+              {uxText?.quote_title || "Daily Inspiration"}
+            </h3>
+          </div>
+
+          <p className="sanskrit text-2xl md:text-3xl font-medium text-stone-900 mb-8 leading-[1.8] italic text-center px-4">
             {quote.sanskrit_sloka}
           </p>
-          <p className="text-stone-700 leading-relaxed mb-4 border-l-2 border-orange-100 pl-4">
-            {quote.bhavam}
-          </p>
-          <div className="bg-orange-50 p-3 rounded-xl flex items-center justify-between">
-            <p className="text-orange-900 text-sm font-bold flex items-center gap-2">
-              <i className="fa-solid fa-lightbulb text-orange-500"></i>
+          
+          <div className="space-y-6 border-l-2 border-orange-50 pl-8 mb-8">
+            <h4 className="text-[9px] uppercase font-black tracking-widest text-stone-400">Slokam Bhavam</h4>
+            <p className="text-stone-700 leading-relaxed text-lg font-medium italic">
+              {quote.bhavam}
+            </p>
+          </div>
+
+          <div className="bg-orange-50 p-6 rounded-[2rem] border border-orange-100 shadow-inner">
+            <div className="flex items-center gap-3 mb-1">
+              <i className="fa-solid fa-lightbulb text-orange-500 text-sm"></i>
+              <span className="text-[9px] uppercase font-black tracking-widest text-orange-900 opacity-60">Daily Reflection</span>
+            </div>
+            <p className="text-orange-900 text-sm font-bold leading-relaxed">
               {quote.daily_reflection}
             </p>
-            <div className="text-[8px] text-green-600 font-black uppercase tracking-widest bg-white px-2 py-1 rounded-md">Offline</div>
           </div>
         </section>
       )}
 
       {story && (
-        <section className="bg-stone-900 text-stone-100 rounded-3xl shadow-xl p-8 space-y-4 relative group">
+        <section className="bg-stone-900 text-stone-100 rounded-[3.5rem] shadow-2xl p-10 space-y-6 relative group transition-all duration-500 hover:shadow-stone-900/40">
           <button 
             onClick={() => handleShare(story.title, `${story.story}\n\nMoral: ${story.moral}`)}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-orange-600"
+            className="absolute top-6 right-8 w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-orange-600 shadow-sm"
           >
-            <i className="fa-solid fa-share-nodes text-sm"></i>
+            <i className="fa-solid fa-share-nodes text-base"></i>
           </button>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="p-2 bg-stone-800 rounded-lg">
-               <i className="fa-solid fa-feather-pointed text-orange-400"></i>
-            </span>
-            <h3 className="cinzel text-lg font-bold">{story.title}</h3>
+          
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 bg-white/5 rounded-[1.2rem] flex items-center justify-center">
+               <i className="fa-solid fa-feather-pointed text-orange-400 text-xl"></i>
+            </div>
+            <h3 className="cinzel text-xl font-bold tracking-tight">{story.title}</h3>
           </div>
-          <p className="text-stone-300 leading-relaxed text-sm">
+          
+          <p className="text-stone-300 leading-relaxed text-base italic opacity-90">
             {story.story}
           </p>
-          <div className="pt-4 border-t border-stone-800 flex items-center justify-between">
-            <p className="text-orange-300 italic text-sm">
-              <span className="font-bold uppercase tracking-tighter not-italic mr-2">Moral:</span>
+          
+          <div className="pt-8 border-t border-white/5">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-1 w-4 bg-orange-400 rounded-full"></div>
+              <p className="text-orange-400 text-[10px] font-black uppercase tracking-[0.2em]">The Moral Path</p>
+            </div>
+            <p className="text-white font-bold text-lg leading-tight tracking-tight">
               {story.moral}
             </p>
-            <span className="text-[8px] opacity-30 uppercase tracking-widest font-black">Saved Permanently</span>
           </div>
         </section>
       )}

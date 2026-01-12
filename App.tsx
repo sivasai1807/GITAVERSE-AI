@@ -8,6 +8,7 @@ import Read from './components/Read';
 import Discover from './components/Discover';
 import AskGita from './components/AskGita';
 
+const DIVINE_LOGO_PATH = "logo.png"; 
 const FALLBACK_LOGO = "https://images.unsplash.com/photo-1590059392655-08e826b1f237?q=80&w=400&auto=format&fit=crop";
 
 const App: React.FC = () => {
@@ -51,9 +52,10 @@ const App: React.FC = () => {
         <div className="text-center mb-16 flex flex-col items-center relative z-10">
           <div className="w-56 h-56 rounded-full overflow-hidden mb-8 divine-aura border-[10px] border-white bg-white flex items-center justify-center shadow-2xl relative">
             <img 
-              src={FALLBACK_LOGO} 
+              src={DIVINE_LOGO_PATH} 
               alt="Krishna Logo" 
-              className="w-full h-full object-cover transition-transform hover:scale-110 duration-700" 
+              className="w-full h-full object-cover scale-150 object-center transition-transform hover:scale-[1.65] duration-700" 
+              onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
             />
           </div>
           <h1 className="cinzel text-4xl md:text-5xl font-black text-stone-900 mb-3 tracking-tighter">GitaVerse AI</h1>
@@ -86,9 +88,10 @@ const App: React.FC = () => {
         <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setCurrentView(ViewState.HOME)}>
           <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-orange-100 shadow-sm bg-white flex items-center justify-center transition-transform group-hover:scale-105">
             <img 
-              src={FALLBACK_LOGO} 
+              src={DIVINE_LOGO_PATH} 
               alt="Logo" 
-              className="w-full h-full object-cover" 
+              className="w-full h-full object-cover scale-150" 
+              onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
             />
           </div>
           <div>
@@ -109,7 +112,7 @@ const App: React.FC = () => {
         <div className="max-w-4xl mx-auto w-full pb-32 pt-4">
           {currentView === ViewState.HOME && <Home language={language} uxText={uxText} />}
           {currentView === ViewState.READ && <Read language={language} uxText={uxText} />}
-          {currentView === ViewState.ASK_GITA && <AskGita />}
+          {currentView === ViewState.ASK_GITA && <AskGita language={language} />}
           {currentView === ViewState.DISCOVER && <Discover />}
         </div>
       </main>

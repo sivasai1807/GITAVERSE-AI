@@ -36,11 +36,18 @@ export interface ChapterIntro {
   chapter_summary: string;
 }
 
+export interface VideoItem {
+  title: string;
+  id: string; // YouTube ID
+  thumbnail: string;
+  category: string;
+}
+
 export interface DiscoverContent {
   meditations: string[];
   topics: string[];
   articles: string[];
-  videos: string[];
+  videos: VideoItem[];
 }
 
 export interface GitaResponse {

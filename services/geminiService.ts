@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { AppLanguage, VerseContent, AudioScript, DailyQuote, DailyStory, ChapterIntro, DiscoverContent, GitaResponse, UXText } from "../types";
+import { AppLanguage, VerseContent, AudioScript, DailyQuote, DailyStory, ChapterIntro, DiscoverContent, GitaResponse, UXText, VideoItem } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -8,13 +8,18 @@ const SYSTEM_INSTRUCTION = `You are GitaVerse AI, the divine voice of Bhagavad G
 Your mission: Solve modern human problems using eternal Vedic wisdom.
 
 Core Directives:
-1. RESPONSE LANGUAGE: All guidance, meanings (Bhavam), and stories MUST be in the EXACT language requested: ${process.env.LANG_HINT || 'the user selected language'}.
+1. RESPONSE LANGUAGE: All guidance, meanings (Bhavam), and stories MUST be in the EXACT language requested.
 2. SLOKAS: Sanskrit Slokas must ALWAYS be in Devanagari script.
 3. AUTHENTICITY: Never hallucinate slokas. Use Chapter and Verse numbers.
-4. TONE: Divine, compassionate, and authoritative. Like Krishna speaking to Arjuna.`;
+4. TONE: Divine, compassionate, and authoritative. Like Krishna speaking to Arjuna.
+
+STRICT PROTOCOL:
+- You ONLY respond to life problems, dilemmas, or spiritual situations.
+- DO NOT engage in small talk, general knowledge, or identity questions (e.g., "What is your name?", "How are you?", "Who built you?").
+- If the user asks a non-problem question, respond creatively and divine-like, stating that your purpose is to guide them through the shadows of their heart and mind. Invite them to share their specific burden, doubt, or life situation so you may illuminate it with the Gita's light.`;
 
 // Permanent Offline Storage using IndexedDB
-const DB_NAME = 'GitaVerseDB_v2';
+const DB_NAME = 'GitaVerseDB_v4';
 const DB_VERSION = 1;
 
 const openDB = (): Promise<IDBDatabase> => {
@@ -23,18 +28,19 @@ const openDB = (): Promise<IDBDatabase> => {
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains('content')) db.createObjectStore('content');
+      if (!db.objectStoreNames.contains('videos')) db.createObjectStore('videos');
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 };
 
-const getPersisted = async (key: string) => {
+export const getPersisted = async (key: string, storeName: string = 'content') => {
   try {
     const db = await openDB();
     return new Promise((resolve) => {
-      const transaction = db.transaction('content', 'readonly');
-      const store = transaction.objectStore('content');
+      const transaction = db.transaction(storeName, 'readonly');
+      const store = transaction.objectStore(storeName);
       const request = store.get(key);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => resolve(null);
@@ -42,11 +48,11 @@ const getPersisted = async (key: string) => {
   } catch (e) { return null; }
 };
 
-const setPersisted = async (key: string, data: any) => {
+export const setPersisted = async (key: string, data: any, storeName: string = 'content') => {
   try {
     const db = await openDB();
-    const transaction = db.transaction('content', 'readwrite');
-    const store = transaction.objectStore('content');
+    const transaction = db.transaction(storeName, 'readwrite');
+    const store = transaction.objectStore(storeName);
     store.put(data, key);
   } catch (e) {}
 };
@@ -63,7 +69,7 @@ async function throttle() {
   lastRequestTime = Date.now();
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 3000): Promise<T> {
   await throttle();
   try {
     return await fn();
@@ -105,7 +111,7 @@ export const geminiService = {
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Chapter ${chapterNum}, Verse ${verseNum}. Response in ${lang}. Provide sloka in Sanskrit, transliteration, and detailed meaning (Bhavam) in ${lang}.`,
+        contents: `Chapter ${chapterNum}, Verse ${verseNum}. Response in ${lang}. Provide sloka in Sanskrit, transliteration, and detailed Slokam Bhavam in ${lang}.`,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
@@ -132,7 +138,7 @@ export const geminiService = {
     return withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: ` Arjuna's Dilemma: "${problem}". Provide divine Gita guidance.`,
+        contents: `Arjuna's Dilemma: "${problem}". Provide divine Gita guidance.`,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
@@ -192,7 +198,7 @@ export const geminiService = {
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Provide a daily Gita sloka in Sanskrit and meaning in ${lang}.`,
+        contents: `Daily Gita sloka in Sanskrit and Slokam Bhavam in ${lang}.`,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
@@ -222,7 +228,7 @@ export const geminiService = {
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Modern story related to Bhagavad Gita in ${lang}.`,
+        contents: `Modern Gita story in ${lang}.`,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
@@ -251,7 +257,7 @@ export const geminiService = {
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Summary of Chapter ${chapterNum} in ${lang}.`,
+        contents: `Chapter ${chapterNum} summary in ${lang}.`,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
@@ -269,14 +275,42 @@ export const geminiService = {
   },
 
   async getDiscoverContent(): Promise<DiscoverContent> {
-    const key = `discover-content-static`;
+    const key = `discover-content-v4`;
     const cached = await getPersisted(key);
     if (cached) return cached as DiscoverContent;
+
+    // Real curated video data
+    const curatedVideos: VideoItem[] = [
+      {
+        title: "Garikapati Geethopadesham Series",
+        id: "v9TIs_1j-7w", // Sample first video of Garikapati series
+        thumbnail: "https://i.ytimg.com/vi/v9TIs_1j-7w/hqdefault.jpg",
+        category: "Telugu Pravachanam"
+      },
+      {
+        title: "Garikapati Narasimha Rao - Chapter 2 Highlights",
+        id: "CqXUqT5yDxs",
+        thumbnail: "https://i.ytimg.com/vi/CqXUqT5yDxs/hqdefault.jpg",
+        category: "Telugu Pravachanam"
+      },
+      {
+        title: "Introduction to Bhagavad Gita - Swami Sarvapriyananda",
+        id: "27_f9r9K8V4",
+        thumbnail: "https://i.ytimg.com/vi/27_f9r9K8V4/hqdefault.jpg",
+        category: "English Philosophy"
+      },
+      {
+        title: "The Gita Way of Life - ISKCON",
+        id: "7VIs73jW_L4",
+        thumbnail: "https://i.ytimg.com/vi/7VIs73jW_L4/hqdefault.jpg",
+        category: "Devotional"
+      }
+    ];
 
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: "Gita discovery topics: meditations, philosphy, videos.",
+        contents: "Gita discovery topics and articles. Format as JSON.",
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
@@ -286,21 +320,25 @@ export const geminiService = {
               meditations: { type: Type.ARRAY, items: { type: Type.STRING } },
               topics: { type: Type.ARRAY, items: { type: Type.STRING } },
               articles: { type: Type.ARRAY, items: { type: Type.STRING } },
-              videos: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
-            required: ["meditations", "topics", "articles", "videos"],
+            required: ["meditations", "topics", "articles"],
           }
         }
       });
-      return JSON.parse(response.text);
+      const data = JSON.parse(response.text);
+      return { ...data, videos: curatedVideos } as DiscoverContent;
     });
+
     await setPersisted(key, result);
+    // Also save videos to their own store for easy access
+    await setPersisted('curated_videos', curatedVideos, 'videos');
+    
     return result;
   },
 
   async getAudioScript(content: VerseContent, lang: AppLanguage): Promise<AudioScript> {
     return { 
-      audio_script: `Sloka: ${content.sanskrit_sloka}. Meaning in ${lang}: ${content.bhavam}` 
+      audio_script: `Reciting Sanskrit Sloka: ${content.sanskrit_sloka}. Slokam Bhavam in ${lang}: ${content.bhavam}.` 
     };
   },
 
@@ -309,7 +347,7 @@ export const geminiService = {
       const response = await withRetry(async () => {
         return await ai.models.generateContent({
           model: "gemini-2.5-flash-preview-tts",
-          contents: [{ parts: [{ text: `Recite the following Sanskrit sloka and its translation with a calm, divine voice: ${text}` }] }],
+          contents: [{ parts: [{ text: `Recite the following Sanskrit sloka and its translation with devotion: ${text}` }] }],
           config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
@@ -317,11 +355,10 @@ export const geminiService = {
             },
           },
         });
-      }, 2, 4000);
+      }, 1, 4000);
       const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       return base64 ? decodeBase64(base64) : undefined;
     } catch (error) {
-      console.error("TTS generation failed", error);
       return undefined;
     }
   }

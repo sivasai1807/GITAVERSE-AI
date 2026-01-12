@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppLanguage, UXText, Chapter, VerseContent, ChapterIntro, AudioScript } from '../types';
 import { GITA_CHAPTERS } from '../constants';
-import { geminiService, decodeAudioData, getPersisted } from '../services/geminiService';
+import { geminiService, decodeAudioData, getPersisted, setPersisted } from '../services/geminiService';
 
 interface ReadProps {
   language: AppLanguage;
@@ -21,6 +21,7 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
   // Offline/Download states
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [cachedVerses, setCachedVerses] = useState<Set<number>>(new Set());
   const [isChapterOffline, setIsChapterOffline] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -28,7 +29,7 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
 
   useEffect(() => {
     if (selectedChapter) {
-      checkChapterOfflineStatus();
+      updateOfflineStatus();
       if (!selectedVerseNum) loadChapterIntro();
       if (selectedVerseNum) loadVerseContent();
     }
@@ -40,13 +41,18 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
     setIsAudioPlaying(false);
   };
 
-  const checkChapterOfflineStatus = async () => {
+  const updateOfflineStatus = async () => {
     if (!selectedChapter) return;
+    const cached = new Set<number>();
     let offlineCount = 0;
     for (let i = 1; i <= selectedChapter.total_verses; i++) {
-      const cached = await getPersisted(`verse-${selectedChapter.chapter_number}-${i}-${language}`);
-      if (cached) offlineCount++;
+      const data = await getPersisted(`verse-${selectedChapter.chapter_number}-${i}-${language}`);
+      if (data) {
+        cached.add(i);
+        offlineCount++;
+      }
     }
+    setCachedVerses(cached);
     setIsChapterOffline(offlineCount === selectedChapter.total_verses);
   };
 
@@ -81,16 +87,45 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
       for (let i = 1; i <= selectedChapter.total_verses; i++) {
         await geminiService.getVerseContent(selectedChapter.chapter_number, i, language);
         setDownloadProgress(Math.round((i / selectedChapter.total_verses) * 100));
-        await new Promise(r => setTimeout(r, 100));
+        // Small delay to prevent blocking the UI
+        if (i % 5 === 0) await new Promise(r => setTimeout(r, 50));
       }
-      setIsChapterOffline(true);
+      await updateOfflineStatus();
     } catch (err) {
       console.error("Download failed", err);
-      alert("Divine connection was weak. Download incomplete, but some verses were saved.");
+      alert("Divine connection interrupted. Some verses were saved successfully.");
     } finally {
       setIsDownloading(false);
       setDownloadProgress(0);
     }
+  };
+
+  const downloadIndividualVerse = async (vNum: number) => {
+    if (!selectedChapter) return;
+    try {
+      await geminiService.getVerseContent(selectedChapter.chapter_number, vNum, language);
+      await updateOfflineStatus();
+    } catch (err) {
+      console.error("Individual download failed", err);
+    }
+  };
+
+  const clearChapterOffline = async () => {
+    if (!selectedChapter || !window.confirm("Do you want to clear these verses from local storage? You will need internet to read them again.")) return;
+    
+    const dbName = 'GitaVerseDB_v4';
+    const request = indexedDB.open(dbName);
+    request.onsuccess = (e: any) => {
+      const db = e.target.result;
+      const transaction = db.transaction('content', 'readwrite');
+      const store = transaction.objectStore('content');
+      for (let i = 1; i <= selectedChapter.total_verses; i++) {
+        store.delete(`verse-${selectedChapter.chapter_number}-${i}-${language}`);
+      }
+      transaction.oncomplete = () => {
+        updateOfflineStatus();
+      };
+    };
   };
 
   const handleShare = async () => {
@@ -105,7 +140,7 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
       try {
         await navigator.share({
           title: `Gita Verse ${selectedChapter.chapter_number}.${selectedVerseNum}`,
-          text: `Sloka: ${verseData.sanskrit_sloka}\n\nSlokam Bhavam (${language}): ${verseData.bhavam}\n\nRef: Ch ${selectedChapter.chapter_number} Verse ${selectedVerseNum}`,
+          text: `Sloka: ${verseData.sanskrit_sloka}\n\nMeaning (${language}): ${verseData.bhavam}\n\nRef: Ch ${selectedChapter.chapter_number} Verse ${selectedVerseNum}`,
           url: shareUrl,
         });
       } catch (err) { console.error("Share failed", err); }
@@ -171,23 +206,33 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
           <i className="fa-solid fa-chevron-left text-xs"></i> All Chapters
         </button>
         
-        {!isChapterOffline ? (
-           <button 
-            disabled={isDownloading}
-            onClick={downloadChapter}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all border border-orange-100 shadow-sm"
-          >
-            {isDownloading ? (
-              <><i className="fa-solid fa-spinner fa-spin"></i> Saving {downloadProgress}%</>
-            ) : (
-              <><i className="fa-solid fa-cloud-arrow-down"></i> Save Offline</>
-            )}
-          </button>
-        ) : (
-          <div className="flex items-center gap-1.5 text-green-600 text-[9px] font-black uppercase tracking-widest bg-green-50 px-4 py-2 rounded-full border border-green-100 shadow-sm">
-            <i className="fa-solid fa-circle-check"></i> Divine Wisdom Saved
-          </div>
-        )}
+        <div className="flex gap-2">
+          {isChapterOffline && (
+            <button 
+              onClick={clearChapterOffline}
+              className="px-4 py-2 bg-stone-100 text-stone-500 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all border border-stone-200"
+            >
+              <i className="fa-solid fa-trash-can mr-1"></i> Clear Cache
+            </button>
+          )}
+          {!isChapterOffline ? (
+            <button 
+              disabled={isDownloading}
+              onClick={downloadChapter}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all border border-orange-100 shadow-sm"
+            >
+              {isDownloading ? (
+                <><i className="fa-solid fa-spinner fa-spin"></i> {downloadProgress}%</>
+              ) : (
+                <><i className="fa-solid fa-cloud-arrow-down"></i> Save Chapter</>
+              )}
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 text-green-600 text-[9px] font-black uppercase tracking-widest bg-green-50 px-4 py-2 rounded-full border border-green-100 shadow-sm">
+              <i className="fa-solid fa-circle-check"></i> Chapter Offline
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-white border border-orange-50 p-10 rounded-[3rem] shadow-2xl shadow-orange-50 relative overflow-hidden text-center">
@@ -217,15 +262,25 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
           <div className="h-px flex-1 bg-stone-100"></div>
         </div>
         <div className="grid grid-cols-5 sm:grid-cols-8 gap-3">
-          {Array.from({ length: selectedChapter?.total_verses || 0 }, (_, i) => i + 1).map((v) => (
-            <button
-              key={v}
-              onClick={() => setSelectedVerseNum(v)}
-              className="aspect-square bg-stone-50 rounded-2xl border border-stone-50 flex items-center justify-center text-xs font-black text-stone-700 hover:bg-orange-600 hover:text-white hover:border-orange-600 hover:scale-110 transition-all shadow-sm active:scale-90"
-            >
-              {v}
-            </button>
-          ))}
+          {Array.from({ length: selectedChapter?.total_verses || 0 }, (_, i) => i + 1).map((v) => {
+            const isCached = cachedVerses.has(v);
+            return (
+              <button
+                key={v}
+                onClick={() => setSelectedVerseNum(v)}
+                className={`aspect-square rounded-2xl border flex flex-col items-center justify-center text-xs font-black transition-all shadow-sm active:scale-90 relative ${
+                  isCached 
+                    ? 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-600 hover:text-white' 
+                    : 'bg-stone-50 border-stone-50 text-stone-700 hover:bg-orange-600 hover:text-white hover:border-orange-600 hover:scale-110'
+                }`}
+              >
+                {v}
+                {isCached && (
+                  <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-400"></div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -238,7 +293,16 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
           <i className="fa-solid fa-chevron-left text-xs"></i> Verses
         </button>
         <div className="flex items-center gap-3">
-           <button 
+          {selectedVerseNum && !cachedVerses.has(selectedVerseNum) && (
+            <button 
+              onClick={() => downloadIndividualVerse(selectedVerseNum)}
+              className="w-12 h-12 rounded-[1.5rem] bg-white border border-stone-100 text-stone-500 flex items-center justify-center hover:bg-orange-50 hover:text-orange-600 transition-all active:scale-95 shadow-sm"
+              title="Save Verse Offline"
+            >
+              <i className="fa-solid fa-cloud-arrow-down"></i>
+            </button>
+          )}
+          <button 
             onClick={handleShare}
             className="w-12 h-12 rounded-[1.5rem] bg-white border border-stone-100 text-stone-500 flex items-center justify-center hover:bg-orange-50 hover:text-orange-600 transition-all active:scale-95 shadow-sm"
           >

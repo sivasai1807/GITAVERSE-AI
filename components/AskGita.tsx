@@ -43,6 +43,14 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
     }
   };
 
+  const getAudioButtonLabel = (lang: AppLanguage) => {
+    switch (lang) {
+      case 'Telugu': return "దైవ వాణి వినండి";
+      case 'Hindi': return "दिव्य वाणी सुनें";
+      default: return "Listen to Divine Voice";
+    }
+  };
+
   const scrollToBottom = () => {
     endOfChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -64,7 +72,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
     setPlayingIndex(null);
   };
 
-  const playDivineVani = async (index: number, response: GitaResponse) => {
+  const playDivineVani = async (index: number, content: GitaResponse | string) => {
     if (playingIndex === index) {
       stopAudio();
       return;
@@ -80,9 +88,14 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
       const ctx = audioContextRef.current;
       if (ctx.state === 'suspended') await ctx.resume();
 
-      const script = response.sloka_text 
-        ? `Reciting Sloka: ${response.sloka_text}. Meaning: ${response.solution}`
-        : response.solution;
+      let script = "";
+      if (typeof content === 'string') {
+        script = content;
+      } else {
+        script = content.sloka_text 
+          ? `Reciting Sloka: ${content.sloka_text}. Meaning: ${content.solution}`
+          : content.solution;
+      }
 
       const pcmData = await geminiService.generateTTS(script);
       if (pcmData) {
@@ -187,14 +200,9 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                       <div className="space-y-6">
                         <div className="flex justify-between items-center border-b border-orange-50 pb-4">
                           <span className="cinzel text-[10px] font-black text-orange-600 uppercase tracking-widest">{getDivineTitle(language)}</span>
-                          <div className="flex gap-2">
-                             <button 
-                                onClick={() => playDivineVani(i, msg.content as GitaResponse)}
-                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingIndex === i ? 'bg-orange-600 text-white animate-pulse' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}
-                             >
-                                {loadingAudioIndex === i ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className={`fa-solid ${playingIndex === i ? 'fa-pause' : 'fa-play'} text-sm`}></i>}
-                             </button>
-                          </div>
+                          <span className="text-[10px] text-orange-400 font-black uppercase tracking-widest">
+                            {msg.content.verse_reference}
+                          </span>
                         </div>
 
                         <div className="space-y-4">
@@ -206,9 +214,6 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                             <div className="bg-orange-50/50 p-6 rounded-3xl border border-orange-100/50">
                               <p className="sanskrit text-xl text-stone-900 text-center leading-loose">
                                 {msg.content.sloka_text}
-                              </p>
-                              <p className="text-[10px] text-orange-600 font-black text-center mt-3 uppercase tracking-widest">
-                                Chapter & Verse: {msg.content.verse_reference}
                               </p>
                             </div>
                           )}
@@ -222,9 +227,53 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                              </p>
                           </div>
                         </div>
+
+                        {/* Play Aloud Button */}
+                        <div className="pt-4 border-t border-orange-50 flex justify-center">
+                          <button 
+                            onClick={() => playDivineVani(i, msg.content as GitaResponse)}
+                            disabled={loadingAudioIndex === i}
+                            className={`flex items-center gap-3 px-6 py-3 rounded-full transition-all duration-300 shadow-sm active:scale-95 ${
+                              playingIndex === i 
+                                ? 'bg-orange-600 text-white animate-pulse' 
+                                : 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white'
+                            }`}
+                          >
+                            {loadingAudioIndex === i ? (
+                              <i className="fa-solid fa-spinner fa-spin"></i>
+                            ) : (
+                              <i className={`fa-solid ${playingIndex === i ? 'fa-pause' : 'fa-play'}`}></i>
+                            )}
+                            <span className="text-[10px] font-black uppercase tracking-widest">
+                              {playingIndex === i ? "Silence Vani" : getAudioButtonLabel(language)}
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <p className="text-stone-800 text-sm leading-relaxed italic font-medium">{msg.content}</p>
+                      <div className="space-y-6">
+                        <p className="text-stone-800 text-sm leading-relaxed italic font-medium">{msg.content}</p>
+                        <div className="pt-4 border-t border-orange-50 flex justify-center">
+                          <button 
+                            onClick={() => playDivineVani(i, msg.content as string)}
+                            disabled={loadingAudioIndex === i}
+                            className={`flex items-center gap-3 px-6 py-3 rounded-full transition-all duration-300 shadow-sm active:scale-95 ${
+                              playingIndex === i 
+                                ? 'bg-orange-600 text-white animate-pulse' 
+                                : 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white'
+                            }`}
+                          >
+                            {loadingAudioIndex === i ? (
+                              <i className="fa-solid fa-spinner fa-spin"></i>
+                            ) : (
+                              <i className={`fa-solid ${playingIndex === i ? 'fa-pause' : 'fa-play'}`}></i>
+                            )}
+                            <span className="text-[10px] font-black uppercase tracking-widest">
+                              {getAudioButtonLabel(language)}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                   <span className="text-[10px] text-stone-400 ml-4 font-bold opacity-60 uppercase">{msg.timestamp}</span>

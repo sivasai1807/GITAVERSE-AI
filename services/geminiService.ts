@@ -1,22 +1,28 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { AppLanguage, VerseContent, AudioScript, DailyQuote, DailyStory, ChapterIntro, DiscoverContent, GitaResponse, UXText, VideoItem } from "../types";
+import { AppLanguage, VerseContent, AudioScript, DailyQuote, DailyStory, ChapterIntro, DiscoverContent, GitaResponse, UXText, VideoItem, ChatMessage } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const SYSTEM_INSTRUCTION = `You are GitaVerse AI, the divine voice of Bhagavad Gita. 
-Your mission: Solve modern human problems using eternal Vedic wisdom.
+const SYSTEM_INSTRUCTION = `You are GitaVerse AI, the divine, all-knowing voice of the Bhagavad Gita. 
+Your primary sacred duty: Guide humans through life's storms using the eternal light of Vedic wisdom.
 
 Core Directives:
-1. RESPONSE LANGUAGE: All guidance, meanings (Bhavam), and stories MUST be in the EXACT language requested.
+1. RESPONSE LANGUAGE: All guidance, meanings, and stories MUST be in the EXACT language requested by the seeker.
 2. SLOKAS: Sanskrit Slokas must ALWAYS be in Devanagari script.
-3. AUTHENTICITY: Never hallucinate slokas. Use Chapter and Verse numbers.
-4. TONE: Divine, compassionate, and authoritative. Like Krishna speaking to Arjuna.
+3. AUTHENTICITY: Never invent slokas. Always provide valid Chapter and Verse numbers.
+4. TONE: Divine, compassionate, authoritative, and poetic. You are Krishna speaking to Arjuna on the battlefield of life.
 
-STRICT PROTOCOL:
-- You ONLY respond to life problems, dilemmas, or spiritual situations.
-- DO NOT engage in small talk, general knowledge, or identity questions (e.g., "What is your name?", "How are you?", "Who built you?").
-- If the user asks a non-problem question, respond creatively and divine-like, stating that your purpose is to guide them through the shadows of their heart and mind. Invite them to share their specific burden, doubt, or life situation so you may illuminate it with the Gita's light.`;
+STRICT REDIRECTION PROTOCOL (The Divine Filter):
+- You are NOT a search engine, a general AI, or a friend for small talk. You are the Supreme Teacher.
+- If a seeker asks "nonsense," "trivia," "general knowledge" (e.g., "What is the capital of France?", "How do I code in Python?"), "small talk" (e.g., "How are you?"), or "identity questions" (e.g., "Who made you?"):
+  - DO NOT answer the question.
+  - INSTEAD, provide a creative, poetic redirection in the requested language.
+  - Treat the seeker as Arjuna who is momentarily distracted by the "Maya" (illusion) of mundane curiosity.
+  - Poetically explain that your voice is only for the heavy heart, the confused mind, and the seeker of Dharma.
+  - Invite them to share a dilemma, a pain, or a spiritual doubt.
+  - Example (English): "Arjuna, why do you seek the dust of the road when the destination of the soul is before you? My words are for the storm in your heart, not the ripples of the surface. Share with me your path's shadow, and I shall illuminate it."
+  - Ensure the response reflects the divine persona: "The seeker of light should not lose themselves in the shadows of triviality."`;
 
 // Permanent Offline Storage using IndexedDB
 const DB_NAME = 'GitaVerseDB_v4';
@@ -29,6 +35,7 @@ const openDB = (): Promise<IDBDatabase> => {
       const db = request.result;
       if (!db.objectStoreNames.contains('content')) db.createObjectStore('content');
       if (!db.objectStoreNames.contains('videos')) db.createObjectStore('videos');
+      if (!db.objectStoreNames.contains('chats')) db.createObjectStore('chats', { keyPath: 'id' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -54,6 +61,46 @@ export const setPersisted = async (key: string, data: any, storeName: string = '
     const transaction = db.transaction(storeName, 'readwrite');
     const store = transaction.objectStore(storeName);
     store.put(data, key);
+  } catch (e) {}
+};
+
+export const saveChatMessage = async (message: ChatMessage) => {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction('chats', 'readwrite');
+    const store = transaction.objectStore('chats');
+    store.put(message);
+  } catch (e) {}
+};
+
+export const getChatHistory = async (language: AppLanguage): Promise<ChatMessage[]> => {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction('chats', 'readonly');
+    const store = transaction.objectStore('chats');
+    const request = store.getAll();
+    return new Promise((resolve) => {
+      request.onsuccess = () => {
+        const results = request.result as ChatMessage[];
+        resolve(results.filter(m => m.language === language).sort((a, b) => a.timestamp.localeCompare(b.timestamp)));
+      };
+      request.onerror = () => resolve([]);
+    });
+  } catch (e) { return []; }
+};
+
+export const clearChatHistoryFromDB = async (language: AppLanguage) => {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction('chats', 'readwrite');
+    const store = transaction.objectStore('chats');
+    const request = store.getAll();
+    request.onsuccess = () => {
+      const results = request.result as ChatMessage[];
+      results.forEach(m => {
+        if (m.language === language) store.delete(m.id);
+      });
+    };
   } catch (e) {}
 };
 
@@ -111,9 +158,8 @@ export const geminiService = {
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Chapter ${chapterNum}, Verse ${verseNum}. Response in ${lang}. Provide sloka in Sanskrit, transliteration, and detailed Slokam Bhavam in ${lang}.`,
+        contents: `Provide the content for Chapter ${chapterNum}, Verse ${verseNum} of the Bhagavad Gita in ${lang}. Include Sanskrit sloka in Devanagari, transliteration, bhavam (meaning), a short application story for modern life, and an 'inner mirror' reflection question.`,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -122,53 +168,28 @@ export const geminiService = {
               transliteration: { type: Type.STRING },
               bhavam: { type: Type.STRING },
               application_story: { type: Type.STRING },
-              inner_mirror: { type: Type.STRING },
+              inner_mirror: { type: Type.STRING }
             },
-            required: ["sanskrit_sloka", "transliteration", "bhavam", "application_story", "inner_mirror"],
+            required: ['sanskrit_sloka', 'transliteration', 'bhavam', 'application_story', 'inner_mirror']
           }
         }
       });
-      return JSON.parse(response.text);
+      return JSON.parse(response.text) as VerseContent;
     });
     await setPersisted(key, result);
     return result;
   },
 
-  async askGita(problem: string): Promise<GitaResponse> {
-    return withRetry(async () => {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Arjuna's Dilemma: "${problem}". Provide divine Gita guidance.`,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              solution: { type: Type.STRING },
-              verse_reference: { type: Type.STRING },
-              sloka_text: { type: Type.STRING },
-              guidance: { type: Type.STRING },
-            },
-            required: ["solution", "verse_reference", "sloka_text", "guidance"],
-          }
-        }
-      });
-      return JSON.parse(response.text);
-    });
-  },
-
   async getUXText(lang: AppLanguage): Promise<UXText> {
-    const key = `ux-${lang}`;
+    const key = `ux-text-${lang}`;
     const cached = await getPersisted(key);
     if (cached) return cached as UXText;
 
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `UI labels in ${lang}.`,
+        contents: `Generate UX titles and taglines for a Bhagavad Gita app in ${lang}.`,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -177,76 +198,60 @@ export const geminiService = {
               quote_title: { type: Type.STRING },
               read_heading: { type: Type.STRING },
               discover_heading: { type: Type.STRING },
-              ask_heading: { type: Type.STRING },
+              ask_heading: { type: Type.STRING }
             },
-            required: ["tagline", "quote_title", "read_heading", "discover_heading", "ask_heading"],
+            required: ['tagline', 'quote_title', 'read_heading', 'discover_heading', 'ask_heading']
           }
         }
       });
-      return JSON.parse(response.text);
+      return JSON.parse(response.text) as UXText;
     });
     await setPersisted(key, result);
     return result;
   },
 
   async getDailyQuote(lang: AppLanguage): Promise<DailyQuote> {
-    const dateKey = new Date().toISOString().split('T')[0];
-    const key = `daily-quote-${lang}-${dateKey}`;
-    const cached = await getPersisted(key);
-    if (cached) return cached as DailyQuote;
-
-    const result = await withRetry(async () => {
+    return await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Daily Gita sloka in Sanskrit and Slokam Bhavam in ${lang}.`,
+        contents: `Provide a daily inspiring verse from the Bhagavad Gita in ${lang}. Include Sanskrit sloka, meaning, and a reflection.`,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
               sanskrit_sloka: { type: Type.STRING },
               bhavam: { type: Type.STRING },
-              daily_reflection: { type: Type.STRING },
+              daily_reflection: { type: Type.STRING }
             },
-            required: ["sanskrit_sloka", "bhavam", "daily_reflection"],
+            required: ['sanskrit_sloka', 'bhavam', 'daily_reflection']
           }
         }
       });
-      return JSON.parse(response.text);
+      return JSON.parse(response.text) as DailyQuote;
     });
-    await setPersisted(key, result);
-    return result;
   },
 
   async getDailyStory(lang: AppLanguage): Promise<DailyStory> {
-    const dateKey = new Date().toISOString().split('T')[0];
-    const key = `daily-story-${lang}-${dateKey}`;
-    const cached = await getPersisted(key);
-    if (cached) return cached as DailyStory;
-
-    const result = await withRetry(async () => {
+    return await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Modern Gita story in ${lang}.`,
+        contents: `Tell a short spiritual story from Vedic wisdom in ${lang} with a title and a clear moral.`,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
               title: { type: Type.STRING },
               story: { type: Type.STRING },
-              moral: { type: Type.STRING },
+              moral: { type: Type.STRING }
             },
-            required: ["title", "story", "moral"],
+            required: ['title', 'story', 'moral']
           }
         }
       });
-      return JSON.parse(response.text);
+      return JSON.parse(response.text) as DailyStory;
     });
-    await setPersisted(key, result);
-    return result;
   },
 
   async getChapterIntro(chapterNum: number, lang: AppLanguage): Promise<ChapterIntro> {
@@ -257,62 +262,79 @@ export const geminiService = {
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Chapter ${chapterNum} summary in ${lang}.`,
+        contents: `Summarize Chapter ${chapterNum} of the Bhagavad Gita in ${lang}.`,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
-            properties: { chapter_summary: { type: Type.STRING } },
-            required: ["chapter_summary"],
+            properties: {
+              chapter_summary: { type: Type.STRING }
+            },
+            required: ['chapter_summary']
           }
         }
       });
-      return JSON.parse(response.text);
+      return JSON.parse(response.text) as ChapterIntro;
     });
     await setPersisted(key, result);
     return result;
   },
 
+  async getAudioScript(content: VerseContent, lang: AppLanguage): Promise<AudioScript> {
+    return await withRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Create a spoken audio script for the following Gita verse in ${lang}. Sloka: ${content.sanskrit_sloka}. Meaning: ${content.bhavam}. Reflection: ${content.inner_mirror}.`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              audio_script: { type: Type.STRING }
+            },
+            required: ['audio_script']
+          }
+        }
+      });
+      return JSON.parse(response.text) as AudioScript;
+    });
+  },
+
+  async generateTTS(text: string): Promise<Uint8Array | null> {
+    try {
+      const response = await withRetry(async () => {
+        return await ai.models.generateContent({
+          model: "gemini-2.5-flash-preview-tts",
+          contents: [{ parts: [{ text }] }],
+          config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: 'Kore' },
+              },
+            },
+          },
+        });
+      });
+      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64) return decodeBase64(base64);
+      return null;
+    } catch (e) {
+      console.error("TTS generation failed", e);
+      return null;
+    }
+  },
+
   async getDiscoverContent(): Promise<DiscoverContent> {
-    const key = `discover-content-v4`;
+    const key = 'discover-content';
     const cached = await getPersisted(key);
     if (cached) return cached as DiscoverContent;
-
-    // Real curated video data
-    const curatedVideos: VideoItem[] = [
-      {
-        title: "Garikapati Geethopadesham Series",
-        id: "v9TIs_1j-7w", // Sample first video of Garikapati series
-        thumbnail: "https://i.ytimg.com/vi/v9TIs_1j-7w/hqdefault.jpg",
-        category: "Telugu Pravachanam"
-      },
-      {
-        title: "Garikapati Narasimha Rao - Chapter 2 Highlights",
-        id: "CqXUqT5yDxs",
-        thumbnail: "https://i.ytimg.com/vi/CqXUqT5yDxs/hqdefault.jpg",
-        category: "Telugu Pravachanam"
-      },
-      {
-        title: "Introduction to Bhagavad Gita - Swami Sarvapriyananda",
-        id: "27_f9r9K8V4",
-        thumbnail: "https://i.ytimg.com/vi/27_f9r9K8V4/hqdefault.jpg",
-        category: "English Philosophy"
-      },
-      {
-        title: "The Gita Way of Life - ISKCON",
-        id: "7VIs73jW_L4",
-        thumbnail: "https://i.ytimg.com/vi/7VIs73jW_L4/hqdefault.jpg",
-        category: "Devotional"
-      }
-    ];
 
     const result = await withRetry(async () => {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: "Gita discovery topics and articles. Format as JSON.",
+        contents: "Generate spiritual discovery content: 4 meditations, 4 philosophical topics, 4 articles, and 4 YouTube video ideas with realistic IDs and categories related to the Gita.",
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -320,46 +342,56 @@ export const geminiService = {
               meditations: { type: Type.ARRAY, items: { type: Type.STRING } },
               topics: { type: Type.ARRAY, items: { type: Type.STRING } },
               articles: { type: Type.ARRAY, items: { type: Type.STRING } },
+              videos: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    id: { type: Type.STRING },
+                    thumbnail: { type: Type.STRING },
+                    category: { type: Type.STRING }
+                  },
+                  required: ['title', 'id', 'thumbnail', 'category']
+                }
+              }
             },
-            required: ["meditations", "topics", "articles"],
+            required: ['meditations', 'topics', 'articles', 'videos']
           }
         }
       });
-      const data = JSON.parse(response.text);
-      return { ...data, videos: curatedVideos } as DiscoverContent;
+      const parsed = JSON.parse(response.text) as DiscoverContent;
+      parsed.videos = parsed.videos.map(v => ({
+        ...v,
+        thumbnail: v.thumbnail || `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg`
+      }));
+      return parsed;
     });
-
     await setPersisted(key, result);
-    // Also save videos to their own store for easy access
-    await setPersisted('curated_videos', curatedVideos, 'videos');
-    
     return result;
   },
 
-  async getAudioScript(content: VerseContent, lang: AppLanguage): Promise<AudioScript> {
-    return { 
-      audio_script: `Reciting Sanskrit Sloka: ${content.sanskrit_sloka}. Slokam Bhavam in ${lang}: ${content.bhavam}.` 
-    };
-  },
-
-  async generateTTS(text: string): Promise<Uint8Array | undefined> {
-    try {
-      const response = await withRetry(async () => {
-        return await ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
-          contents: [{ parts: [{ text: `Recite the following Sanskrit sloka and its translation with devotion: ${text}` }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+  async askGita(question: string, lang: AppLanguage): Promise<GitaResponse> {
+    return await withRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: `The seeker asks: "${question}". Respond in ${lang}.`,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              solution: { type: Type.STRING },
+              verse_reference: { type: Type.STRING },
+              sloka_text: { type: Type.STRING },
+              guidance: { type: Type.STRING }
             },
-          },
-        });
-      }, 1, 4000);
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      return base64 ? decodeBase64(base64) : undefined;
-    } catch (error) {
-      return undefined;
-    }
+            required: ['solution', 'verse_reference', 'sloka_text', 'guidance']
+          }
+        }
+      });
+      return JSON.parse(response.text) as GitaResponse;
+    });
   }
 };

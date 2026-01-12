@@ -57,6 +57,14 @@ export interface GitaResponse {
   guidance: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'gita';
+  content: GitaResponse | string;
+  timestamp: string;
+  language: AppLanguage;
+}
+
 export interface UXText {
   tagline: string;
   quote_title: string;

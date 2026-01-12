@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { geminiService, decodeAudioData } from '../services/geminiService';
-import { GitaResponse, AppLanguage } from '../types';
+import { geminiService, decodeAudioData, getChatHistory, saveChatMessage, clearChatHistoryFromDB } from '../services/geminiService';
+import { GitaResponse, AppLanguage, ChatMessage } from '../types';
 
 const DIVINE_LOGO_PATH = "logo.png"; 
 const FALLBACK_LOGO = "https://images.unsplash.com/photo-1590059392655-08e826b1f237?q=80&w=400&auto=format&fit=crop";
@@ -11,15 +11,25 @@ interface AskGitaProps {
 }
 
 const AskGita: React.FC<AskGitaProps> = ({ language }) => {
-  const [messages, setMessages] = useState<{ role: 'user' | 'gita'; content: GitaResponse | string; timestamp: string }[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [loadingAudioIndex, setLoadingAudioIndex] = useState<number | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
   
   const endOfChatRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // Load History on Mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      const history = await getChatHistory(language);
+      setMessages(history);
+    };
+    loadHistory();
+  }, [language]);
 
   // Creative Localized Titles
   const getDivineTitle = (lang: AppLanguage) => {
@@ -37,9 +47,14 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
 
   const getPlaceholderText = (lang: AppLanguage) => {
     switch (lang) {
-      case 'Telugu': return "మీ పరిస్థితిని తెలియజేయండి...";
-      case 'Hindi': return "अपनी दुविधा साझा करें...";
-      default: return "Share your situation or doubt...";
+      case 'Sanskrit': return "हे पार्थ, स्वकीयं सङ्कटं वर्णयतु...";
+      case 'Hindi': return "हे पार्थ, अपनी जीवन-दुविधा विस्तार से बताएं...";
+      case 'Telugu': return "ఓ అర్జునా, నీ మనసులోని భారాన్ని పంచుకో...";
+      case 'Tamil': return "அர்ஜுனா, உன் வாழ்க்கையின் குழப்பத்தைப் பகிரவும்...";
+      case 'Malayalam': return "അർജുനാ, നിങ്ങളുടെ ഹൃദയഭാരം എന്നോട് പറയൂ...";
+      case 'Kannada': return "ಪಾರ್ಥ, ನಿನ್ನ ಜೀವನದ ಸಂದಿಗ್ಧತೆಯನ್ನು ಹಂಚಿಕೊ...";
+      case 'Bengali': return "হে পার্থ, তোমার জীবনের সমস্যার কথা বলো...";
+      default: return "Arjuna, share the burden of your soul with me...";
     }
   };
 
@@ -70,6 +85,13 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
       } catch (e) {}
     }
     setPlayingIndex(null);
+  };
+
+  const clearHistory = async () => {
+    if (window.confirm("Do you wish to clear these scrolls of conversation?")) {
+      await clearChatHistoryFromDB(language);
+      setMessages([]);
+    }
   };
 
   const playDivineVani = async (index: number, content: GitaResponse | string) => {
@@ -125,118 +147,163 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
 
     const userMsg = input.trim();
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const messageId = Date.now().toString();
     
+    const newUserMessage: ChatMessage = {
+      id: messageId,
+      role: 'user',
+      content: userMsg,
+      timestamp,
+      language
+    };
+
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg, timestamp }]);
+    setMessages(prev => [...prev, newUserMessage]);
+    await saveChatMessage(newUserMessage);
     setIsTyping(true);
 
     try {
-      const response = await geminiService.askGita(userMsg);
+      const response = await geminiService.askGita(userMsg, language);
       const gitaTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setMessages(prev => [...prev, { role: 'gita', content: response, timestamp: gitaTimestamp }]);
+      const gitaMessageId = (Date.now() + 1).toString();
+      
+      const newGitaMessage: ChatMessage = {
+        id: gitaMessageId,
+        role: 'gita',
+        content: response,
+        timestamp: gitaTimestamp,
+        language
+      };
+
+      setMessages(prev => [...prev, newGitaMessage]);
+      await saveChatMessage(newGitaMessage);
     } catch (err) {
       console.error(err);
       const errorTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setMessages(prev => [...prev, { role: 'gita', content: { solution: "The divine frequency is faint. Pray once more, Arjuna.", verse_reference: "Dharma", sloka_text: "", guidance: "Seek clarity in silence and retry." }, timestamp: errorTimestamp }]);
+      const errorGitaMsg: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        role: 'gita',
+        content: { 
+          solution: "The divine frequency is faint. Pray once more, Arjuna.", 
+          verse_reference: "Dharma", 
+          sloka_text: "", 
+          guidance: "Seek clarity in silence and retry." 
+        },
+        timestamp: errorTimestamp,
+        language
+      };
+      setMessages(prev => [...prev, errorGitaMsg]);
     } finally {
       setIsTyping(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden bg-orange-50/20">
-      {/* Background Watermark */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
-        <img src={DIVINE_LOGO_PATH} alt="Watermark" className="w-[80%] max-w-lg grayscale" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+    <div className="flex flex-col h-full relative overflow-hidden bg-stone-50/20">
+      {/* Header Info / Clear Actions */}
+      <div className="flex-none px-6 py-2 flex justify-between items-center z-10 bg-white/50 backdrop-blur-md border-b border-orange-100/30">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+          <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">Divine Connection Active</span>
+        </div>
+        {messages.length > 0 && (
+          <button 
+            onClick={clearHistory}
+            className="text-[9px] font-black text-stone-400 uppercase tracking-widest hover:text-red-500 transition-colors flex items-center gap-1.5"
+          >
+            <i className="fa-solid fa-trash-can text-[10px]"></i>
+            Clear Scrolls
+          </button>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-6 space-y-8 pb-32">
+      {/* Background Watermark */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-[0.02] pointer-events-none select-none">
+        <img src={DIVINE_LOGO_PATH} alt="" className="w-[70%] max-w-md grayscale" />
+      </div>
+
+      <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-6 space-y-8 pb-40">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center text-center space-y-8 mt-12 animate-fade-in">
+          <div className="flex flex-col items-center justify-center text-center space-y-8 mt-12 animate-fade-in px-4">
             <div className="relative">
-              <div className="absolute inset-0 bg-orange-400 rounded-full blur-3xl opacity-20 scale-150 divine-aura"></div>
+              <div className="absolute inset-0 bg-orange-400 rounded-full blur-[60px] opacity-10 scale-150 animate-pulse"></div>
               <img 
                 src={DIVINE_LOGO_PATH} 
-                className="w-40 h-40 object-cover rounded-full border-4 border-white shadow-2xl relative z-10"
+                className="w-36 h-36 object-cover rounded-full border-[6px] border-white shadow-2xl relative z-10"
                 alt="Divine Avatar"
                 onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }}
               />
             </div>
             <div className="space-y-4 max-w-sm">
-              <h2 className="cinzel text-3xl font-black text-stone-900">{getDivineTitle(language)}</h2>
-              <p className="text-stone-500 italic text-sm leading-relaxed">
-                "Small talk is for the ego, but a dilemma is for the soul. Share the burden of your heart, and let the Gita be your light."
+              <h2 className="cinzel text-3xl font-black text-stone-900 tracking-tight">{getDivineTitle(language)}</h2>
+              <p className="text-stone-500 italic text-sm leading-relaxed font-medium">
+                "Arjuna, the ripples on the surface do not reveal the depths. Share with me the storm in your heart, and I shall illuminate it."
               </p>
             </div>
             
             <div className="grid grid-cols-1 gap-3 w-full max-w-xs pt-4">
-              <button onClick={() => setInput("I feel lost and don't know my purpose.")} className="p-4 bg-white/80 backdrop-blur-sm border border-orange-100 rounded-2xl text-left text-xs font-bold text-stone-700 hover:border-orange-400 transition-all shadow-sm">
-                I feel lost and don't know my purpose.
+              <button onClick={() => setInput("I feel lost and don't know my purpose.")} className="p-4 bg-white/90 backdrop-blur-sm border border-stone-100 rounded-2xl text-left text-[11px] font-black text-stone-600 hover:border-orange-400 hover:shadow-lg transition-all active:scale-95">
+                <i className="fa-solid fa-compass text-orange-400 mr-2 opacity-60"></i> I feel lost and don't know my purpose.
               </button>
-              <button onClick={() => setInput("How do I handle the betrayal of a loved one?")} className="p-4 bg-white/80 backdrop-blur-sm border border-orange-100 rounded-2xl text-left text-xs font-bold text-stone-700 hover:border-orange-400 transition-all shadow-sm">
-                How do I handle betrayal?
+              <button onClick={() => setInput("How do I handle the betrayal of a loved one?")} className="p-4 bg-white/90 backdrop-blur-sm border border-stone-100 rounded-2xl text-left text-[11px] font-black text-stone-600 hover:border-orange-400 hover:shadow-lg transition-all active:scale-95">
+                <i className="fa-solid fa-heart-crack text-orange-400 mr-2 opacity-60"></i> How do I handle betrayal?
               </button>
             </div>
           </div>
         )}
 
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+          <div key={msg.id || i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
             {msg.role === 'user' ? (
               <div className="max-w-[85%] flex flex-col items-end">
-                <div className="bg-stone-900 text-white px-6 py-4 rounded-[2rem] rounded-tr-none shadow-xl text-sm font-medium">
+                <div className="bg-stone-900 text-white px-6 py-4 rounded-[2.2rem] rounded-tr-none shadow-xl text-sm font-medium leading-relaxed">
                   {msg.content as string}
                 </div>
-                <span className="text-[10px] text-stone-400 mt-2 mr-2 font-bold opacity-60 uppercase">{msg.timestamp}</span>
+                <span className="text-[9px] text-stone-400 mt-2 mr-3 font-black opacity-50 uppercase tracking-widest">{msg.timestamp}</span>
               </div>
             ) : (
               <div className="max-w-[95%] flex gap-4 items-start">
-                <div className="w-10 h-10 rounded-full bg-white shadow-lg flex-shrink-0 flex items-center justify-center border border-orange-100 overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-white shadow-md flex-shrink-0 flex items-center justify-center border border-orange-50 overflow-hidden mt-1 ring-2 ring-orange-50/50">
                    <img src={DIVINE_LOGO_PATH} className="w-full h-full object-cover scale-150" alt="Gita" onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }} />
                 </div>
                 <div className="flex flex-col space-y-3 flex-1">
-                  <div className="bg-white border border-orange-50 p-6 rounded-[2.5rem] rounded-tl-none shadow-2xl shadow-orange-900/5">
+                  <div className="bg-white border border-orange-50/50 p-6 rounded-[2.8rem] rounded-tl-none shadow-2xl shadow-orange-900/5 ring-1 ring-orange-100/10">
                     {typeof msg.content === 'object' ? (
                       <div className="space-y-6">
-                        <div className="flex justify-between items-center border-b border-orange-50 pb-4">
+                        <div className="flex justify-between items-center border-b border-stone-50 pb-4">
                           <span className="cinzel text-[10px] font-black text-orange-600 uppercase tracking-widest">{getDivineTitle(language)}</span>
                           <span className="text-[10px] text-orange-400 font-black uppercase tracking-widest">
                             {msg.content.verse_reference}
                           </span>
                         </div>
-
                         <div className="space-y-4">
-                          <p className="text-stone-800 text-base leading-relaxed italic font-medium">
+                          <p className="text-stone-800 text-[15px] leading-relaxed italic font-medium">
                             "{msg.content.solution}"
                           </p>
-                          
                           {msg.content.sloka_text && (
-                            <div className="bg-orange-50/50 p-6 rounded-3xl border border-orange-100/50">
-                              <p className="sanskrit text-xl text-stone-900 text-center leading-loose">
+                            <div className="bg-orange-50/40 p-6 rounded-3xl border border-orange-100/30">
+                              <p className="sanskrit text-xl text-stone-900 text-center leading-loose tracking-wide">
                                 {msg.content.sloka_text}
                               </p>
                             </div>
                           )}
-
-                          <div className="pt-4 flex items-start gap-3">
-                             <div className="w-8 h-8 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
+                          <div className="pt-2 flex items-start gap-3">
+                             <div className="w-8 h-8 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0 shadow-lg">
                                 <i className="fa-solid fa-dharmachakra text-orange-400 text-xs"></i>
                              </div>
-                             <p className="text-xs text-stone-500 font-medium leading-relaxed italic pt-1">
+                             <p className="text-[11px] text-stone-500 font-bold leading-relaxed italic pt-1 opacity-80">
                                 {msg.content.guidance}
                              </p>
                           </div>
                         </div>
-
-                        {/* Play Aloud Button */}
-                        <div className="pt-4 border-t border-orange-50 flex justify-center">
+                        <div className="pt-5 border-t border-stone-50 flex justify-center">
                           <button 
                             onClick={() => playDivineVani(i, msg.content as GitaResponse)}
                             disabled={loadingAudioIndex === i}
-                            className={`flex items-center gap-3 px-6 py-3 rounded-full transition-all duration-300 shadow-sm active:scale-95 ${
+                            className={`flex items-center gap-3 px-8 py-3.5 rounded-full transition-all duration-500 shadow-sm active:scale-95 border ${
                               playingIndex === i 
-                                ? 'bg-orange-600 text-white animate-pulse' 
-                                : 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white'
+                                ? 'bg-orange-600 text-white border-orange-500 animate-pulse' 
+                                : 'bg-white text-orange-600 border-orange-100 hover:bg-orange-50 hover:border-orange-200'
                             }`}
                           >
                             {loadingAudioIndex === i ? (
@@ -244,7 +311,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                             ) : (
                               <i className={`fa-solid ${playingIndex === i ? 'fa-pause' : 'fa-play'}`}></i>
                             )}
-                            <span className="text-[10px] font-black uppercase tracking-widest">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em]">
                               {playingIndex === i ? "Silence Vani" : getAudioButtonLabel(language)}
                             </span>
                           </button>
@@ -252,15 +319,15 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                       </div>
                     ) : (
                       <div className="space-y-6">
-                        <p className="text-stone-800 text-sm leading-relaxed italic font-medium">{msg.content}</p>
-                        <div className="pt-4 border-t border-orange-50 flex justify-center">
+                        <p className="text-stone-800 text-[15px] leading-relaxed italic font-medium">{msg.content}</p>
+                        <div className="pt-4 border-t border-stone-50 flex justify-center">
                           <button 
                             onClick={() => playDivineVani(i, msg.content as string)}
                             disabled={loadingAudioIndex === i}
-                            className={`flex items-center gap-3 px-6 py-3 rounded-full transition-all duration-300 shadow-sm active:scale-95 ${
+                            className={`flex items-center gap-3 px-8 py-3.5 rounded-full transition-all duration-500 shadow-sm active:scale-95 border ${
                               playingIndex === i 
-                                ? 'bg-orange-600 text-white animate-pulse' 
-                                : 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white'
+                                ? 'bg-orange-600 text-white border-orange-500 animate-pulse' 
+                                : 'bg-white text-orange-600 border-orange-100 hover:bg-orange-50 hover:border-orange-200'
                             }`}
                           >
                             {loadingAudioIndex === i ? (
@@ -268,7 +335,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                             ) : (
                               <i className={`fa-solid ${playingIndex === i ? 'fa-pause' : 'fa-play'}`}></i>
                             )}
-                            <span className="text-[10px] font-black uppercase tracking-widest">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em]">
                               {getAudioButtonLabel(language)}
                             </span>
                           </button>
@@ -276,7 +343,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                       </div>
                     )}
                   </div>
-                  <span className="text-[10px] text-stone-400 ml-4 font-bold opacity-60 uppercase">{msg.timestamp}</span>
+                  <span className="text-[9px] text-stone-400 ml-4 font-black opacity-50 uppercase tracking-widest">{msg.timestamp}</span>
                 </div>
               </div>
             )}
@@ -285,43 +352,61 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
         
         {isTyping && (
           <div className="flex gap-4 items-center pl-2 animate-pulse">
-            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-md border border-orange-100 overflow-hidden">
+            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-orange-50 overflow-hidden">
                <img src={DIVINE_LOGO_PATH} className="w-full h-full object-cover scale-150" alt="Thinking" onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }} />
             </div>
-            <div className="bg-white/80 backdrop-blur-sm px-6 py-3 rounded-full text-xs italic text-stone-400 font-bold border border-orange-50">
-              Krishna is preparing your guidance...
+            <div className="bg-white/90 backdrop-blur-sm px-6 py-3.5 rounded-full text-[11px] italic text-stone-400 font-black border border-orange-50/50 shadow-sm uppercase tracking-widest">
+              Krishna is reading your heart...
             </div>
           </div>
         )}
         <div ref={endOfChatRef} />
       </div>
 
-      {/* Input Bar */}
-      <div className="fixed bottom-24 left-0 right-0 px-4 pb-4 z-40 flex justify-center">
-        <div className="max-w-2xl w-full">
-           <form 
-            onSubmit={handleSend}
-            className="flex items-center gap-3 p-2 bg-white/95 backdrop-blur-2xl rounded-full shadow-[0_20px_50px_-10px_rgba(0,0,0,0.15)] border border-orange-50 ring-1 ring-black/5"
+      {/* Input Bar - Fixed Visual Glitch (Removed Rectangular Border) */}
+      <div className="fixed bottom-24 left-0 right-0 px-4 pb-6 z-40 flex justify-center">
+        <div className={`max-w-2xl w-full transition-all duration-500 ${isFocused ? 'scale-[1.01]' : 'scale-100'}`}>
+           <div 
+            className={`flex items-center gap-1 p-1 bg-white/95 backdrop-blur-2xl rounded-full shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border transition-all duration-500 relative group ${isFocused ? 'border-orange-300 ring-4 ring-orange-400/5' : 'border-stone-100 ring-1 ring-black/5'}`}
           >
-            <div className="w-12 h-12 rounded-full overflow-hidden border border-orange-50 flex-shrink-0 ml-1">
+            {/* Input Aura */}
+            {isFocused && (
+              <div className="absolute inset-0 rounded-full bg-orange-500/5 animate-pulse pointer-events-none"></div>
+            )}
+
+            <div className={`w-12 h-12 rounded-full overflow-hidden border border-stone-100/50 flex-shrink-0 ml-1 transition-all duration-700 bg-white flex items-center justify-center ${isFocused ? 'scale-90 shadow-[0_0_15px_rgba(234,88,12,0.3)] rotate-6' : 'scale-100'}`}>
                <img src={DIVINE_LOGO_PATH} className="w-full h-full object-cover scale-150" alt="Icon" onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }} />
             </div>
-            <input 
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={getPlaceholderText(language)}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold text-stone-800 placeholder:text-stone-300 px-2"
-              disabled={isTyping}
-            />
-            <button 
-              type="submit"
-              disabled={!input.trim() || isTyping}
-              className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${input.trim() && !isTyping ? 'bg-orange-600 text-white' : 'bg-stone-100 text-stone-300'}`}
-            >
-              <i className="fa-solid fa-arrow-up text-lg"></i>
-            </button>
-          </form>
+            
+            <form onSubmit={handleSend} className="flex-1 flex items-center">
+              <input 
+                type="text"
+                value={input}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={getPlaceholderText(language)}
+                className="flex-1 bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus:border-none shadow-none text-sm font-bold text-stone-800 placeholder:text-stone-300 px-4 py-4 appearance-none"
+                disabled={isTyping}
+                style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
+              />
+              
+              <button 
+                type="submit"
+                disabled={!input.trim() || isTyping}
+                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl transition-all duration-500 ${input.trim() && !isTyping ? 'bg-orange-600 text-white scale-100 rotate-0 shadow-orange-600/20' : 'bg-stone-50 text-stone-200 scale-90 -rotate-12'}`}
+              >
+                <i className="fa-solid fa-feather-pointed text-lg"></i>
+              </button>
+            </form>
+          </div>
+          
+          {/* Subtle Tip */}
+          {!isFocused && messages.length === 0 && (
+            <p className="text-center mt-3 text-[9px] font-black uppercase tracking-[0.3em] text-stone-400 animate-fade-in pointer-events-none select-none">
+              "When you seek clarity, the universe answers."
+            </p>
+          )}
         </div>
       </div>
     </div>

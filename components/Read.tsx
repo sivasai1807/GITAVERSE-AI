@@ -116,14 +116,23 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
     setDownloadProgress(0);
     try {
       for (let i = 1; i <= selectedChapter.total_verses; i++) {
-        await geminiService.getVerseContent(selectedChapter.chapter_number, i, language);
+        const cacheKey = `verse-${selectedChapter.chapter_number}-${i}-${language}`;
+        const alreadyExists = await getPersisted(cacheKey);
+        
+        if (!alreadyExists) {
+          await geminiService.getVerseContent(selectedChapter.chapter_number, i, language);
+          // Wait longer after each verse to avoid 429 errors during bulk downloads
+          await new Promise(r => setTimeout(r, 4000)); 
+        }
+        
         setDownloadProgress(Math.round((i / selectedChapter.total_verses) * 100));
-        if (i % 5 === 0) await new Promise(r => setTimeout(r, 50));
+        updateOfflineStatus(); // Update UI as we go
       }
       await updateOfflineStatus();
+      alert("Divine scrolls saved for offline reflection.");
     } catch (err) {
       console.error("Download failed", err);
-      alert("Divine connection interrupted. Some verses were saved successfully.");
+      alert("Divine connection interrupted (API Quota Limit). Some verses were saved successfully.");
     } finally {
       setIsDownloading(false);
       setDownloadProgress(0);

@@ -25,7 +25,7 @@ STRICT REDIRECTION PROTOCOL (The Divine Filter):
   - Maintain the divine authority. If they persist with nonsense, become more poetic and firm about your purpose.`;
 
 // Permanent Offline Storage using IndexedDB
-const DB_NAME = 'GitaVerseDB_v5'; // Bumped version for bookmarks
+const DB_NAME = 'GitaVerseDB_v5'; 
 const DB_VERSION = 2;
 
 const openDB = (): Promise<IDBDatabase> => {
@@ -159,7 +159,7 @@ export const getAllBookmarks = async (language: AppLanguage) => {
 };
 
 let lastRequestTime = 0;
-const MIN_REQUEST_GAP = 1500;
+const MIN_REQUEST_GAP = 3000; // Increased to be safer with per-minute limits
 
 async function throttle() {
   const now = Date.now();
@@ -170,13 +170,16 @@ async function throttle() {
   lastRequestTime = Date.now();
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 3000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 4, delay = 5000): Promise<T> {
   await throttle();
   try {
     return await fn();
   } catch (error: any) {
-    const isRateLimit = error?.message?.includes('429') || error?.status === 429;
+    const errorMsg = error?.message || "";
+    const isRateLimit = errorMsg.includes('429') || error?.status === 429 || errorMsg.includes('quota');
+    
     if (isRateLimit && retries > 0) {
+      console.warn(`Rate limit hit. Retrying in ${delay / 1000}s... (${retries} retries left)`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry(fn, retries - 1, delay * 2);
     }

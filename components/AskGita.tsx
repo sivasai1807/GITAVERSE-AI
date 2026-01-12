@@ -351,12 +351,20 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
         ))}
         
         {isTyping && (
-          <div className="flex gap-4 items-center pl-2 animate-pulse">
-            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-orange-50 overflow-hidden">
-               <img src={DIVINE_LOGO_PATH} className="w-full h-full object-cover scale-150" alt="Thinking" onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }} />
+          <div className="flex gap-4 items-center pl-2 animate-fade-in">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-orange-50 overflow-hidden ring-2 ring-orange-100/50">
+                 <img src={DIVINE_LOGO_PATH} className="w-full h-full object-cover scale-150 animate-spin-slow" alt="Thinking" onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }} />
+              </div>
+              <div className="absolute -inset-1 bg-orange-400/20 rounded-full blur-md animate-pulse"></div>
             </div>
-            <div className="bg-white/90 backdrop-blur-sm px-6 py-3.5 rounded-full text-[11px] italic text-stone-400 font-black border border-orange-50/50 shadow-sm uppercase tracking-widest">
-              Krishna is reading your heart...
+            <div className="bg-white/90 backdrop-blur-sm px-6 py-3.5 rounded-full text-[11px] italic text-stone-500 font-black border border-orange-50/50 shadow-sm uppercase tracking-[0.15em] flex items-center gap-3">
+              <span>Krishna is reading your heart</span>
+              <div className="flex gap-1 items-center h-full pt-1">
+                <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce"></span>
+              </div>
             </div>
           </div>
         )}
@@ -367,7 +375,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
       <div className="fixed bottom-24 left-0 right-0 px-4 pb-6 z-40 flex justify-center">
         <div className={`max-w-2xl w-full transition-all duration-500 ${isFocused ? 'scale-[1.01]' : 'scale-100'}`}>
            <div 
-            className={`flex items-center gap-1 p-1 bg-white/95 backdrop-blur-2xl rounded-full shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border transition-all duration-500 relative group ${isFocused ? 'border-orange-300 ring-4 ring-orange-400/5' : 'border-stone-100 ring-1 ring-black/5'}`}
+            className={`flex items-center gap-1 p-1 bg-white/95 backdrop-blur-2xl rounded-full shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border transition-all duration-500 relative group overflow-hidden ${isFocused ? 'border-orange-300 ring-4 ring-orange-400/5' : 'border-stone-100 ring-1 ring-black/5'}`}
           >
             {/* Input Aura */}
             {isFocused && (
@@ -378,7 +386,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                <img src={DIVINE_LOGO_PATH} className="w-full h-full object-cover scale-150" alt="Icon" onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }} />
             </div>
             
-            <form onSubmit={handleSend} className="flex-1 flex items-center">
+            <form onSubmit={handleSend} className="flex-1 flex items-center m-0 p-0 border-none outline-none">
               <input 
                 type="text"
                 value={input}
@@ -386,7 +394,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
                 onBlur={() => setIsFocused(false)}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={getPlaceholderText(language)}
-                className="flex-1 bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus:border-none shadow-none text-sm font-bold text-stone-800 placeholder:text-stone-300 px-4 py-4 appearance-none"
+                className="flex-1 bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus:border-none shadow-none text-sm font-bold text-stone-800 placeholder:text-stone-400/70 px-4 py-4 appearance-none"
                 disabled={isTyping}
                 style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
               />
@@ -394,7 +402,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
               <button 
                 type="submit"
                 disabled={!input.trim() || isTyping}
-                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl transition-all duration-500 ${input.trim() && !isTyping ? 'bg-orange-600 text-white scale-100 rotate-0 shadow-orange-600/20' : 'bg-stone-50 text-stone-200 scale-90 -rotate-12'}`}
+                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl transition-all duration-500 flex-shrink-0 mr-1 ${input.trim() && !isTyping ? 'bg-orange-600 text-white scale-100 rotate-0 shadow-orange-600/20' : 'bg-stone-50 text-stone-200 scale-90 -rotate-12'}`}
               >
                 <i className="fa-solid fa-feather-pointed text-lg"></i>
               </button>

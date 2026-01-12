@@ -47,15 +47,38 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
     setLoading(true);
     setAudioScript(null);
     try {
-      // Fetch in parallel for < 2s performance
-      const [content, script] = await Promise.all([
-        geminiService.getVerseContent(selectedChapter.chapter_number, selectedVerseNum, language),
-        geminiService.getAudioScript(selectedChapter.chapter_number, selectedVerseNum, language)
-      ]);
+      const content = await geminiService.getVerseContent(selectedChapter.chapter_number, selectedVerseNum, language);
+      const script = await geminiService.getAudioScript(content, language);
       setVerseData(content);
       setAudioScript(script);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  };
+
+  const handleShare = async () => {
+    if (!verseData || !selectedChapter || !selectedVerseNum) return;
+    if (navigator.share) {
+      // Robust URL fix
+      let shareUrl = window.location.origin;
+      try {
+        const urlObj = new URL(window.location.href);
+        if (urlObj.protocol.startsWith('http')) {
+          shareUrl = window.location.href;
+        }
+      } catch (e) {
+        shareUrl = "https://gitaverse.ai/read";
+      }
+
+      try {
+        await navigator.share({
+          title: `Gita Verse ${selectedChapter.chapter_number}.${selectedVerseNum}`,
+          text: `Sanskrit: ${verseData.sanskrit_sloka}\n\nMeaning (${language}): ${verseData.bhavam}\n\n- GitaVerse AI`,
+          url: shareUrl,
+        });
+      } catch (err) { console.error("Share failed", err); }
+    } else {
+      alert("Sharing is not supported on this browser.");
+    }
   };
 
   const playVerseAudio = async () => {
@@ -63,9 +86,10 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
     if (isAudioPlaying) { stopAudio(); return; }
     setIsAudioPlaying(true);
     try {
-      if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+      if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const ctx = audioContextRef.current;
       if (ctx.state === 'suspended') await ctx.resume();
+      
       const pcmData = await geminiService.generateTTS(audioScript.audio_script);
       if (pcmData) {
         const audioBuffer = await decodeAudioData(pcmData, ctx);
@@ -120,7 +144,7 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
       </div>
 
       <div className="bg-white p-6 rounded-3xl border border-orange-100">
-        <h3 className="cinzel text-xs font-bold text-stone-400 mb-6 uppercase tracking-widest text-center">Select Passage</h3>
+        <h3 className="cinzel text-xs font-bold text-stone-400 uppercase tracking-widest mb-6">Select Passage</h3>
         <div className="grid grid-cols-6 sm:grid-cols-10 gap-2">
           {Array.from({ length: selectedChapter?.total_verses || 0 }, (_, i) => i + 1).map((v) => (
             <button
@@ -142,13 +166,21 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
         <button onClick={() => { setSelectedVerseNum(null); setVerseData(null); stopAudio(); }} className="flex items-center gap-2 text-stone-500 font-bold uppercase text-[10px] tracking-widest hover:text-orange-600">
           <i className="fa-solid fa-chevron-left text-xs"></i> Verses
         </button>
-        <button 
-          onClick={playVerseAudio}
-          disabled={loading || !audioScript}
-          className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all ${isAudioPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-orange-600 text-white hover:scale-105 active:scale-95 disabled:opacity-50'}`}
-        >
-          <i className={`fa-solid ${isAudioPlaying ? 'fa-pause' : 'fa-play'} text-xl ml-0.5`}></i>
-        </button>
+        <div className="flex items-center gap-3">
+           <button 
+            onClick={handleShare}
+            className="w-12 h-12 rounded-full bg-stone-100 text-stone-600 flex items-center justify-center hover:bg-orange-50 hover:text-orange-600 transition-all active:scale-95"
+          >
+            <i className="fa-solid fa-share-nodes"></i>
+          </button>
+          <button 
+            onClick={playVerseAudio}
+            disabled={loading || !audioScript}
+            className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all ${isAudioPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-orange-600 text-white hover:scale-105 active:scale-95 disabled:opacity-50'}`}
+          >
+            <i className={`fa-solid ${isAudioPlaying ? 'fa-pause' : 'fa-play'} text-xl ml-0.5`}></i>
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -158,7 +190,10 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
         </div>
       ) : verseData && (
         <div className="space-y-8">
-          <section className="text-center p-10 bg-white border border-orange-100 rounded-[2.5rem] shadow-sm relative">
+          <section className="text-center p-10 bg-white border border-orange-100 rounded-[2.5rem] shadow-sm relative overflow-hidden">
+            <div className="absolute top-4 left-4 flex items-center gap-1 text-[8px] font-black uppercase text-green-600">
+               <i className="fa-solid fa-circle-check"></i> Persistent Offline
+            </div>
             <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg">
               Verse {selectedVerseNum}
             </div>
@@ -172,28 +207,20 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
 
           <section className="bg-white p-8 rounded-[2rem] border border-orange-50 shadow-sm">
             <h3 className="cinzel text-[10px] font-bold text-orange-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <i className="fa-solid fa-feather-pointed"></i> Divine Meaning
+              <i className="fa-solid fa-feather-pointed"></i> Divine Meaning ({language})
             </h3>
             <p className="text-stone-800 leading-relaxed text-lg italic font-medium">
               {verseData.bhavam}
             </p>
           </section>
 
-          <section className="bg-stone-900 text-stone-100 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
-             <div className="flex items-center gap-2 mb-4">
-              <i className="fa-solid fa-film text-orange-400"></i>
-              <h3 className="cinzel text-[10px] font-bold uppercase tracking-[0.2em]">Modern Life Leela (Story)</h3>
-            </div>
-            <p className="text-stone-300 leading-relaxed text-base italic opacity-90">
+          <section className="bg-stone-900 text-stone-100 p-8 rounded-[2rem] shadow-2xl">
+            <p className="text-stone-300 leading-relaxed text-sm italic opacity-90">
               {verseData.application_story}
             </p>
           </section>
 
           <section className="bg-gradient-to-r from-orange-500 to-amber-500 p-8 rounded-[2rem] text-white shadow-xl">
-             <div className="flex items-center gap-2 mb-3">
-              <i className="fa-solid fa-eye text-white"></i>
-              <h3 className="cinzel text-[10px] font-bold uppercase tracking-[0.2em]">Inner Mirror</h3>
-            </div>
             <p className="text-lg font-bold tracking-tight">
               {verseData.inner_mirror}
             </p>

@@ -1,9 +1,9 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GitaVerse AI - Divine Knowledge Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -12,17 +12,20 @@
         body {
             font-family: 'Lora', serif;
             background-color: #fffcf9; 
-            overflow: hidden; /* Ensure no body scrollbar */
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden; /* Prevent body scroll, we scroll the main div */
         }
         .cinzel { font-family: 'Cinzel', serif; }
         .sanskrit { font-family: 'Sanskrit Text', serif; }
         
-        /* Absolute Scrollbar Removal */
-        ::-webkit-scrollbar {
+        /* Universal Scrollbar Removal */
+        .no-scrollbar::-webkit-scrollbar {
             display: none !important;
             width: 0 !important;
         }
-        * {
+        .no-scrollbar {
             -ms-overflow-style: none !important;
             scrollbar-width: none !important;
         }
@@ -37,12 +40,12 @@
             animation: aura-glow 3s ease-in-out infinite;
         }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+        .animate-fade-in {
+          animation: fade-in 0.5s ease-out forwards;
         }
     </style>
 <script type="importmap">
@@ -57,6 +60,6 @@
 </script>
 </head>
 <body class="text-stone-800">
-    <div id="root"></div>
+    <div id="root" class="h-full"></div>
 </body>
 </html>

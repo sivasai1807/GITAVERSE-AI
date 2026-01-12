@@ -25,17 +25,18 @@ STRICT REDIRECTION PROTOCOL (The Divine Filter):
   - Maintain the divine authority. If they persist with nonsense, become more poetic and firm about your purpose.`;
 
 // Permanent Offline Storage using IndexedDB
-const DB_NAME = 'GitaVerseDB_v4';
-const DB_VERSION = 1;
+const DB_NAME = 'GitaVerseDB_v5'; // Bumped version for bookmarks
+const DB_VERSION = 2;
 
 const openDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event: any) => {
       const db = request.result;
       if (!db.objectStoreNames.contains('content')) db.createObjectStore('content');
       if (!db.objectStoreNames.contains('videos')) db.createObjectStore('videos');
       if (!db.objectStoreNames.contains('chats')) db.createObjectStore('chats', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('bookmarks')) db.createObjectStore('bookmarks', { keyPath: 'id' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -102,6 +103,59 @@ export const clearChatHistoryFromDB = async (language: AppLanguage) => {
       });
     };
   } catch (e) {}
+};
+
+// Bookmark Helpers
+export const toggleBookmark = async (chapter: number, verse: number, language: AppLanguage) => {
+  const id = `bookmark-${chapter}-${verse}-${language}`;
+  const db = await openDB();
+  const transaction = db.transaction('bookmarks', 'readwrite');
+  const store = transaction.objectStore('bookmarks');
+  const existing = await new Promise(resolve => {
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result);
+  });
+
+  if (existing) {
+    store.delete(id);
+    return false;
+  } else {
+    store.put({ id, chapter, verse, language, timestamp: new Date().toISOString() });
+    return true;
+  }
+};
+
+export const isBookmarked = async (chapter: number, verse: number, language: AppLanguage) => {
+  const id = `bookmark-${chapter}-${verse}-${language}`;
+  const db = await openDB();
+  const transaction = db.transaction('bookmarks', 'readonly');
+  const store = transaction.objectStore('bookmarks');
+  return new Promise<boolean>(resolve => {
+    const req = store.get(id);
+    req.onsuccess = () => resolve(!!req.result);
+    req.onerror = () => resolve(false);
+  });
+};
+
+export const getAllBookmarks = async (language: AppLanguage) => {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction('bookmarks', 'readonly');
+    const store = transaction.objectStore('bookmarks');
+    const request = store.getAll();
+    return new Promise<any[]>(resolve => {
+      request.onsuccess = () => {
+        const results = (request.result as any[])
+          .filter(b => b.language === language)
+          .sort((a, b) => {
+            if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+            return a.verse - b.verse;
+          });
+        resolve(results);
+      };
+      request.onerror = () => resolve([]);
+    });
+  } catch (e) { return []; }
 };
 
 let lastRequestTime = 0;

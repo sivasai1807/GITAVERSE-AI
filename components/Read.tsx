@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppLanguage, UXText, Chapter, VerseContent, ChapterIntro, AudioScript } from '../types';
 import { GITA_CHAPTERS } from '../constants';
-import { geminiService, decodeAudioData, getPersisted, setPersisted } from '../services/geminiService';
+import { geminiService, decodeAudioData, getPersisted, toggleBookmark, isBookmarked, getAllBookmarks } from '../services/geminiService';
 
 interface ReadProps {
   language: AppLanguage;
@@ -24,17 +24,48 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
   const [cachedVerses, setCachedVerses] = useState<Set<number>>(new Set());
   const [isChapterOffline, setIsChapterOffline] = useState(false);
 
+  // Bookmark states
+  const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const [isVerseBookmarked, setIsVerseBookmarked] = useState(false);
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+
+  useEffect(() => {
+    loadBookmarks();
+  }, [language]);
 
   useEffect(() => {
     if (selectedChapter) {
       updateOfflineStatus();
       if (!selectedVerseNum) loadChapterIntro();
-      if (selectedVerseNum) loadVerseContent();
+      if (selectedVerseNum) {
+        loadVerseContent();
+        checkBookmarkStatus();
+      }
     }
     return () => stopAudio();
   }, [selectedChapter, selectedVerseNum, language]);
+
+  const loadBookmarks = async () => {
+    const all = await getAllBookmarks(language);
+    setBookmarks(all);
+  };
+
+  const checkBookmarkStatus = async () => {
+    if (selectedChapter && selectedVerseNum) {
+      const bookmarked = await isBookmarked(selectedChapter.chapter_number, selectedVerseNum, language);
+      setIsVerseBookmarked(bookmarked);
+    }
+  };
+
+  const handleToggleBookmark = async () => {
+    if (selectedChapter && selectedVerseNum) {
+      const result = await toggleBookmark(selectedChapter.chapter_number, selectedVerseNum, language);
+      setIsVerseBookmarked(result);
+      loadBookmarks();
+    }
+  };
 
   const stopAudio = () => {
     if (sourceNodeRef.current) try { sourceNodeRef.current.stop(); } catch (e) {}
@@ -87,7 +118,6 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
       for (let i = 1; i <= selectedChapter.total_verses; i++) {
         await geminiService.getVerseContent(selectedChapter.chapter_number, i, language);
         setDownloadProgress(Math.round((i / selectedChapter.total_verses) * 100));
-        // Small delay to prevent blocking the UI
         if (i % 5 === 0) await new Promise(r => setTimeout(r, 50));
       }
       await updateOfflineStatus();
@@ -113,7 +143,7 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
   const clearChapterOffline = async () => {
     if (!selectedChapter || !window.confirm("Do you want to clear these verses from local storage? You will need internet to read them again.")) return;
     
-    const dbName = 'GitaVerseDB_v4';
+    const dbName = 'GitaVerseDB_v5';
     const request = indexedDB.open(dbName);
     request.onsuccess = (e: any) => {
       const db = e.target.result;
@@ -170,32 +200,67 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
     } catch (error) { setIsAudioPlaying(false); }
   };
 
+  const openBookmarkedVerse = (chapterNum: number, verseNum: number) => {
+    const chapter = GITA_CHAPTERS.find(c => c.chapter_number === chapterNum);
+    if (chapter) {
+      setSelectedChapter(chapter);
+      setSelectedVerseNum(verseNum);
+    }
+  };
+
   const renderChapters = () => (
-    <div className="grid grid-cols-1 gap-4 animate-fade-in p-4 max-w-2xl mx-auto">
-      <div className="text-center mb-8">
+    <div className="flex flex-col gap-8 animate-fade-in p-4 max-w-2xl mx-auto">
+      <div className="text-center mb-4">
         <h2 className="cinzel text-2xl font-black text-stone-900 mb-2">Bhagavad Gita</h2>
         <p className="text-stone-500 text-[10px] font-bold uppercase tracking-widest">The Celestial Song of the Lord</p>
       </div>
-      {GITA_CHAPTERS.map((ch) => (
-        <button
-          key={ch.chapter_number}
-          onClick={() => setSelectedChapter(ch)}
-          className="bg-white p-6 rounded-[2.5rem] border border-orange-50 flex items-center justify-between group hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-100 transition-all duration-500 text-left active:scale-[0.98]"
-        >
-          <div className="flex items-center gap-6">
-            <span className="w-14 h-14 bg-gradient-to-br from-orange-600 to-amber-600 text-white rounded-2xl flex items-center justify-center font-bold cinzel text-xl shadow-lg group-hover:rotate-[360deg] transition-transform duration-700">
-              {ch.chapter_number}
-            </span>
-            <div>
-              <h4 className="cinzel font-bold text-stone-800 text-base leading-tight group-hover:text-orange-600 transition-colors">{ch.chapter_name_sanskrit}</h4>
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black mt-1 opacity-70 group-hover:opacity-100 transition-all">{ch.chapter_name_english}</p>
+
+      {bookmarks.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-3 px-2">
+            <div className="w-8 h-8 rounded-xl bg-orange-600 text-white flex items-center justify-center text-xs shadow-lg">
+              <i className="fa-solid fa-bookmark"></i>
             </div>
+            <h3 className="cinzel text-[11px] font-black text-stone-800 uppercase tracking-widest">Bookmarked Scrolls</h3>
           </div>
-          <div className="w-10 h-10 rounded-full border border-stone-50 flex items-center justify-center text-stone-300 group-hover:bg-orange-600 group-hover:text-white group-hover:border-orange-600 transition-all duration-300">
-            <i className="fa-solid fa-arrow-right text-xs"></i>
+          <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 px-2">
+            {bookmarks.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => openBookmarkedVerse(b.chapter, b.verse)}
+                className="flex-none w-32 bg-white p-4 rounded-3xl border border-orange-100 shadow-sm hover:border-orange-500 transition-all active:scale-95 text-center"
+              >
+                <div className="text-[10px] font-black text-orange-600 mb-1">CH {b.chapter}</div>
+                <div className="cinzel text-xl font-bold text-stone-900 mb-1">V {b.verse}</div>
+                <div className="h-0.5 w-6 bg-orange-100 mx-auto rounded-full"></div>
+              </button>
+            ))}
           </div>
-        </button>
-      ))}
+        </section>
+      )}
+
+      <div className="grid grid-cols-1 gap-4">
+        {GITA_CHAPTERS.map((ch) => (
+          <button
+            key={ch.chapter_number}
+            onClick={() => setSelectedChapter(ch)}
+            className="bg-white p-6 rounded-[2.5rem] border border-orange-50 flex items-center justify-between group hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-100 transition-all duration-500 text-left active:scale-[0.98]"
+          >
+            <div className="flex items-center gap-6">
+              <span className="w-14 h-14 bg-gradient-to-br from-orange-600 to-amber-600 text-white rounded-2xl flex items-center justify-center font-bold cinzel text-xl shadow-lg group-hover:rotate-[360deg] transition-transform duration-700">
+                {ch.chapter_number}
+              </span>
+              <div>
+                <h4 className="cinzel font-bold text-stone-800 text-base leading-tight group-hover:text-orange-600 transition-colors">{ch.chapter_name_sanskrit}</h4>
+                <p className="text-[10px] text-stone-400 uppercase tracking-widest font-black mt-1 opacity-70 group-hover:opacity-100 transition-all">{ch.chapter_name_english}</p>
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-full border border-stone-50 flex items-center justify-center text-stone-300 group-hover:bg-orange-600 group-hover:text-white group-hover:border-orange-600 transition-all duration-300">
+              <i className="fa-solid fa-arrow-right text-xs"></i>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -293,15 +358,13 @@ const Read: React.FC<ReadProps> = ({ language, uxText }) => {
           <i className="fa-solid fa-chevron-left text-xs"></i> Verses
         </button>
         <div className="flex items-center gap-3">
-          {selectedVerseNum && !cachedVerses.has(selectedVerseNum) && (
-            <button 
-              onClick={() => downloadIndividualVerse(selectedVerseNum)}
-              className="w-12 h-12 rounded-[1.5rem] bg-white border border-stone-100 text-stone-500 flex items-center justify-center hover:bg-orange-50 hover:text-orange-600 transition-all active:scale-95 shadow-sm"
-              title="Save Verse Offline"
-            >
-              <i className="fa-solid fa-cloud-arrow-down"></i>
-            </button>
-          )}
+          <button 
+            onClick={handleToggleBookmark}
+            className={`w-12 h-12 rounded-[1.5rem] border flex items-center justify-center transition-all active:scale-95 shadow-sm ${isVerseBookmarked ? 'bg-orange-600 border-orange-600 text-white' : 'bg-white border-stone-100 text-stone-500 hover:bg-orange-50 hover:text-orange-600'}`}
+            title={isVerseBookmarked ? "Remove Bookmark" : "Bookmark Verse"}
+          >
+            <i className={`fa-solid fa-bookmark`}></i>
+          </button>
           <button 
             onClick={handleShare}
             className="w-12 h-12 rounded-[1.5rem] bg-white border border-stone-100 text-stone-500 flex items-center justify-center hover:bg-orange-50 hover:text-orange-600 transition-all active:scale-95 shadow-sm"

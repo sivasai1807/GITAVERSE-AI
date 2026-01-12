@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { geminiService, decodeAudioData, getChatHistory, saveChatMessage, clearChatHistoryFromDB } from '../services/geminiService';
 import { GitaResponse, AppLanguage, ChatMessage } from '../types';
 
@@ -31,6 +31,20 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
     loadHistory();
   }, [language]);
 
+  // Group messages by date for better conversation context
+  const groupedMessages = useMemo(() => {
+    const groups: { [key: string]: ChatMessage[] } = {};
+    messages.forEach(msg => {
+      // Use msg.id as fallback for date if timestamp is just time string
+      const dateSource = msg.timestamp.includes('T') ? msg.timestamp : Number(msg.id);
+      const date = new Date(dateSource);
+      const dateKey = date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(msg);
+    });
+    return groups;
+  }, [messages]);
+
   // Creative Localized Titles
   const getDivineTitle = (lang: AppLanguage) => {
     switch (lang) {
@@ -51,7 +65,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
       case 'Hindi': return "हे पार्थ, अपनी जीवन-दुविधा विस्तार से बताएं...";
       case 'Telugu': return "ఓ అర్జునా, నీ మనసులోని భారాన్ని పంచుకో...";
       case 'Tamil': return "அர்ஜுனா, உன் வாழ்க்கையின் குழப்பத்தைப் பகிரவும்...";
-      case 'Malayalam': return "അർജുനാ, നിങ്ങളുടെ ഹൃദയഭാരം എന്നോട് പറയൂ...";
+      case 'Malayalam': return "അർஜുനാ, നിങ്ങളുടെ ഹൃദయഭാരം എന്നോട് പറയూ...";
       case 'Kannada': return "ಪಾರ್ಥ, ನಿನ್ನ ಜೀವನದ ಸಂದಿಗ್ಧತೆಯನ್ನು ಹಂಚಿಕೊ...";
       case 'Bengali': return "হে পার্থ, তোমার জীবনের সমস্যার কথা বলো...";
       default: return "Arjuna, share the burden of your soul with me...";
@@ -64,6 +78,13 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
       case 'Hindi': return "दिव्य वाणी सुनें";
       default: return "Listen to Divine Voice";
     }
+  };
+
+  const formatMessageTime = (msg: ChatMessage) => {
+    // If it's already a time string like "10:30 AM", return it
+    if (msg.timestamp.includes('AM') || msg.timestamp.includes('PM')) return msg.timestamp;
+    // Otherwise format the ISO string
+    return new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const scrollToBottom = () => {
@@ -146,7 +167,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
     if (!input.trim() || isTyping) return;
 
     const userMsg = input.trim();
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timestamp = new Date().toISOString();
     const messageId = Date.now().toString();
     
     const newUserMessage: ChatMessage = {
@@ -164,7 +185,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
 
     try {
       const response = await geminiService.askGita(userMsg, language);
-      const gitaTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const gitaTimestamp = new Date().toISOString();
       const gitaMessageId = (Date.now() + 1).toString();
       
       const newGitaMessage: ChatMessage = {
@@ -179,7 +200,7 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
       await saveChatMessage(newGitaMessage);
     } catch (err) {
       console.error(err);
-      const errorTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const errorTimestamp = new Date().toISOString();
       const errorGitaMsg: ChatMessage = {
         id: (Date.now() + 2).toString(),
         role: 'gita',
@@ -252,102 +273,120 @@ const AskGita: React.FC<AskGitaProps> = ({ language }) => {
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div key={msg.id || i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-            {msg.role === 'user' ? (
-              <div className="max-w-[85%] flex flex-col items-end">
-                <div className="bg-stone-900 text-white px-6 py-4 rounded-[2.2rem] rounded-tr-none shadow-xl text-sm font-medium leading-relaxed">
-                  {msg.content as string}
-                </div>
-                <span className="text-[9px] text-stone-400 mt-2 mr-3 font-black opacity-50 uppercase tracking-widest">{msg.timestamp}</span>
+        {Object.entries(groupedMessages).map(([date, msgs]) => (
+          <React.Fragment key={date}>
+            <div className="flex justify-center my-8">
+              <div className="flex items-center gap-3 px-6 py-2 bg-white/50 backdrop-blur-md rounded-full border border-orange-50 shadow-sm">
+                <div className="h-px w-4 bg-orange-200"></div>
+                <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{date}</span>
+                <div className="h-px w-4 bg-orange-200"></div>
               </div>
-            ) : (
-              <div className="max-w-[95%] flex gap-4 items-start">
-                <div className="w-10 h-10 rounded-full bg-white shadow-md flex-shrink-0 flex items-center justify-center border border-orange-50 overflow-hidden mt-1 ring-2 ring-orange-50/50">
-                   <img src={DIVINE_LOGO_PATH} className="w-full h-full object-cover scale-150" alt="Gita" onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }} />
-                </div>
-                <div className="flex flex-col space-y-3 flex-1">
-                  <div className="bg-white border border-orange-50/50 p-6 rounded-[2.8rem] rounded-tl-none shadow-2xl shadow-orange-900/5 ring-1 ring-orange-100/10">
-                    {typeof msg.content === 'object' ? (
-                      <div className="space-y-6">
-                        <div className="flex justify-between items-center border-b border-stone-50 pb-4">
-                          <span className="cinzel text-[10px] font-black text-orange-600 uppercase tracking-widest">{getDivineTitle(language)}</span>
-                          <span className="text-[10px] text-orange-400 font-black uppercase tracking-widest">
-                            {msg.content.verse_reference}
-                          </span>
-                        </div>
-                        <div className="space-y-4">
-                          <p className="text-stone-800 text-[15px] leading-relaxed italic font-medium">
-                            "{msg.content.solution}"
-                          </p>
-                          {msg.content.sloka_text && (
-                            <div className="bg-orange-50/40 p-6 rounded-3xl border border-orange-100/30">
-                              <p className="sanskrit text-xl text-stone-900 text-center leading-loose tracking-wide">
-                                {msg.content.sloka_text}
-                              </p>
-                            </div>
-                          )}
-                          <div className="pt-2 flex items-start gap-3">
-                             <div className="w-8 h-8 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0 shadow-lg">
-                                <i className="fa-solid fa-dharmachakra text-orange-400 text-xs"></i>
-                             </div>
-                             <p className="text-[11px] text-stone-500 font-bold leading-relaxed italic pt-1 opacity-80">
-                                {msg.content.guidance}
-                             </p>
-                          </div>
-                        </div>
-                        <div className="pt-5 border-t border-stone-50 flex justify-center">
-                          <button 
-                            onClick={() => playDivineVani(i, msg.content as GitaResponse)}
-                            disabled={loadingAudioIndex === i}
-                            className={`flex items-center gap-3 px-8 py-3.5 rounded-full transition-all duration-500 shadow-sm active:scale-95 border ${
-                              playingIndex === i 
-                                ? 'bg-orange-600 text-white border-orange-500 animate-pulse' 
-                                : 'bg-white text-orange-600 border-orange-100 hover:bg-orange-50 hover:border-orange-200'
-                            }`}
-                          >
-                            {loadingAudioIndex === i ? (
-                              <i className="fa-solid fa-spinner fa-spin"></i>
-                            ) : (
-                              <i className={`fa-solid ${playingIndex === i ? 'fa-pause' : 'fa-play'}`}></i>
-                            )}
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-                              {playingIndex === i ? "Silence Vani" : getAudioButtonLabel(language)}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-6">
-                        <p className="text-stone-800 text-[15px] leading-relaxed italic font-medium">{msg.content}</p>
-                        <div className="pt-4 border-t border-stone-50 flex justify-center">
-                          <button 
-                            onClick={() => playDivineVani(i, msg.content as string)}
-                            disabled={loadingAudioIndex === i}
-                            className={`flex items-center gap-3 px-8 py-3.5 rounded-full transition-all duration-500 shadow-sm active:scale-95 border ${
-                              playingIndex === i 
-                                ? 'bg-orange-600 text-white border-orange-500 animate-pulse' 
-                                : 'bg-white text-orange-600 border-orange-100 hover:bg-orange-50 hover:border-orange-200'
-                            }`}
-                          >
-                            {loadingAudioIndex === i ? (
-                              <i className="fa-solid fa-spinner fa-spin"></i>
-                            ) : (
-                              <i className={`fa-solid ${playingIndex === i ? 'fa-pause' : 'fa-play'}`}></i>
-                            )}
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-                              {getAudioButtonLabel(language)}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
+            </div>
+            
+            {msgs.map((msg, i) => (
+              <div key={msg.id || i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                {msg.role === 'user' ? (
+                  <div className="max-w-[85%] flex flex-col items-end">
+                    <div className="bg-stone-900 text-white px-6 py-4 rounded-[2.2rem] rounded-tr-none shadow-xl text-sm font-medium leading-relaxed">
+                      {msg.content as string}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-2 mr-3 opacity-60 group">
+                      <i className="fa-regular fa-clock text-[8px] text-stone-400"></i>
+                      <span className="text-[9px] text-stone-400 font-black uppercase tracking-widest">{formatMessageTime(msg)}</span>
+                    </div>
                   </div>
-                  <span className="text-[9px] text-stone-400 ml-4 font-black opacity-50 uppercase tracking-widest">{msg.timestamp}</span>
-                </div>
+                ) : (
+                  <div className="max-w-[95%] flex gap-4 items-start">
+                    <div className="w-10 h-10 rounded-full bg-white shadow-md flex-shrink-0 flex items-center justify-center border border-orange-50 overflow-hidden mt-1 ring-2 ring-orange-50/50">
+                       <img src={DIVINE_LOGO_PATH} className="w-full h-full object-cover scale-150" alt="Gita" onError={(e) => { e.currentTarget.src = FALLBACK_LOGO; }} />
+                    </div>
+                    <div className="flex flex-col space-y-3 flex-1">
+                      <div className="bg-white border border-orange-50/50 p-6 rounded-[2.8rem] rounded-tl-none shadow-2xl shadow-orange-900/5 ring-1 ring-orange-100/10">
+                        {typeof msg.content === 'object' ? (
+                          <div className="space-y-6">
+                            <div className="flex justify-between items-center border-b border-stone-50 pb-4">
+                              <span className="cinzel text-[10px] font-black text-orange-600 uppercase tracking-widest">{getDivineTitle(language)}</span>
+                              <span className="text-[10px] text-orange-400 font-black uppercase tracking-widest">
+                                {msg.content.verse_reference}
+                              </span>
+                            </div>
+                            <div className="space-y-4">
+                              <p className="text-stone-800 text-[15px] leading-relaxed italic font-medium">
+                                "{msg.content.solution}"
+                              </p>
+                              {msg.content.sloka_text && (
+                                <div className="bg-orange-50/40 p-6 rounded-3xl border border-orange-100/30">
+                                  <p className="sanskrit text-xl text-stone-900 text-center leading-loose tracking-wide">
+                                    {msg.content.sloka_text}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="pt-2 flex items-start gap-3">
+                                 <div className="w-8 h-8 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0 shadow-lg">
+                                    <i className="fa-solid fa-dharmachakra text-orange-400 text-xs"></i>
+                                 </div>
+                                 <p className="text-[11px] text-stone-500 font-bold leading-relaxed italic pt-1 opacity-80">
+                                    {msg.content.guidance}
+                                 </p>
+                              </div>
+                            </div>
+                            <div className="pt-5 border-t border-stone-50 flex justify-center">
+                              <button 
+                                onClick={() => playDivineVani(messages.indexOf(msg), msg.content as GitaResponse)}
+                                disabled={loadingAudioIndex === messages.indexOf(msg)}
+                                className={`flex items-center gap-3 px-8 py-3.5 rounded-full transition-all duration-500 shadow-sm active:scale-95 border ${
+                                  playingIndex === messages.indexOf(msg) 
+                                    ? 'bg-orange-600 text-white border-orange-500 animate-pulse' 
+                                    : 'bg-white text-orange-600 border-orange-100 hover:bg-orange-50 hover:border-orange-200'
+                                }`}
+                              >
+                                {loadingAudioIndex === messages.indexOf(msg) ? (
+                                  <i className="fa-solid fa-spinner fa-spin"></i>
+                                ) : (
+                                  <i className={`fa-solid ${playingIndex === messages.indexOf(msg) ? 'fa-pause' : 'fa-play'}`}></i>
+                                )}
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                                  {playingIndex === messages.indexOf(msg) ? "Silence Vani" : getAudioButtonLabel(language)}
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            <p className="text-stone-800 text-[15px] leading-relaxed italic font-medium">{msg.content}</p>
+                            <div className="pt-4 border-t border-stone-50 flex justify-center">
+                              <button 
+                                onClick={() => playDivineVani(messages.indexOf(msg), msg.content as string)}
+                                disabled={loadingAudioIndex === messages.indexOf(msg)}
+                                className={`flex items-center gap-3 px-8 py-3.5 rounded-full transition-all duration-500 shadow-sm active:scale-95 border ${
+                                  playingIndex === messages.indexOf(msg) 
+                                    ? 'bg-orange-600 text-white border-orange-500 animate-pulse' 
+                                    : 'bg-white text-orange-600 border-orange-100 hover:bg-orange-50 hover:border-orange-200'
+                                }`}
+                              >
+                                {loadingAudioIndex === messages.indexOf(msg) ? (
+                                  <i className="fa-solid fa-spinner fa-spin"></i>
+                                ) : (
+                                  <i className={`fa-solid ${playingIndex === messages.indexOf(msg) ? 'fa-pause' : 'fa-play'}`}></i>
+                                )}
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                                  {getAudioButtonLabel(language)}
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 ml-4 opacity-60 group">
+                        <i className="fa-regular fa-clock text-[8px] text-stone-400"></i>
+                        <span className="text-[9px] text-stone-400 font-black uppercase tracking-widest">{formatMessageTime(msg)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            ))}
+          </React.Fragment>
         ))}
         
         {isTyping && (
